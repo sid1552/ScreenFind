@@ -1,0 +1,40 @@
+<Window x:Class="ScreenFind.MainWindow"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        Title="ScreenFind"
+        Width="420" Height="220"
+        ResizeMode="CanMinimize"
+        WindowStartupLocation="CenterScreen"
+        Background="#1E1E2E">
+    <Grid Margin="20">
+        <StackPanel VerticalAlignment="Center" HorizontalAlignment="Center">
+            <TextBlock Text="ScreenFind" 
+                       FontSize="30" FontWeight="Bold" Foreground="#CDD6F4"
+                       HorizontalAlignment="Center"/>
+            <TextBlock Text="Ctrl+F for your entire screen" 
+                       FontSize="14" Foreground="#A6ADC8"
+                       HorizontalAlignment="Center" Margin="0,4,0,20"/>
+            
+            <Border Background="#313244" CornerRadius="8" Padding="16,10" HorizontalAlignment="Center">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Text="Hotkey:  " FontSize="15" Foreground="#A6ADC8" VerticalAlignment="Center"/>
+                    <Border Background="#45475A" CornerRadius="4" Padding="8,4" Margin="2,0">
+                        <TextBlock Text="Ctrl" FontSize="14" Foreground="#F5E0DC" FontWeight="SemiBold"/>
+                    </Border>
+                    <TextBlock Text=" + " FontSize="15" Foreground="#6C7086" VerticalAlignment="Center"/>
+                    <Border Background="#45475A" CornerRadius="4" Padding="8,4" Margin="2,0">
+                        <TextBlock Text="Shift" FontSize="14" Foreground="#F5E0DC" FontWeight="SemiBold"/>
+                    </Border>
+                    <TextBlock Text=" + " FontSize="15" Foreground="#6C7086" VerticalAlignment="Center"/>
+                    <Border Background="#45475A" CornerRadius="4" Padding="8,4" Margin="2,0">
+                        <TextBlock Text="F" FontSize="14" Foreground="#F5E0DC" FontWeight="SemiBold"/>
+                    </Border>
+                </StackPanel>
+            </Border>
+            
+            <TextBlock Text="Minimize this window — it runs in the background" 
+                       FontSize="11" Foreground="#585B70"
+                       HorizontalAlignment="Center" Margin="0,14,0,0"/>
+        </StackPanel>
+    </Grid>
+</Window>
