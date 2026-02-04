@@ -32,9 +32,31 @@
                 </StackPanel>
             </Border>
             
-            <TextBlock Text="Minimize this window — it runs in the background" 
+            <Button x:Name="TrayButton" Content="Minimize to Tray"
+                    FontSize="13" FontFamily="Segoe UI"
+                    Foreground="#CDD6F4" Background="#45475A"
+                    BorderThickness="0" Padding="16,8"
+                    Cursor="Hand"
+                    HorizontalAlignment="Center" Margin="0,16,0,0"
+                    Click="TrayButton_Click">
+                <Button.Template>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="border" Background="{TemplateBinding Background}"
+                                CornerRadius="8" Padding="{TemplateBinding Padding}">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"/>
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="border" Property="Background" Value="#585B70"/>
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Button.Template>
+            </Button>
+
+            <TextBlock Text="Runs in the background from system tray"
                        FontSize="11" Foreground="#585B70"
-                       HorizontalAlignment="Center" Margin="0,14,0,0"/>
+                       HorizontalAlignment="Center" Margin="0,10,0,0"/>
         </StackPanel>
     </Grid>
 </Window>

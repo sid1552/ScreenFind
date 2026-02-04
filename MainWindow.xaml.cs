@@ -30,11 +30,54 @@ namespace ScreenFind
         // ─── State ─────────────────────────────────────────────────────
         private HwndSource? _hwndSource;
         private OverlayWindow? _currentOverlay;
+        private SysForms.NotifyIcon? _trayIcon;
 
         public MainWindow()
         {
             InitializeComponent();
             Loaded += MainWindow_Loaded;
+            SetupTrayIcon();
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  System tray icon
+        // ────────────────────────────────────────────────────────────────
+        private void SetupTrayIcon()
+        {
+            _trayIcon = new SysForms.NotifyIcon
+            {
+                Text = "ScreenFind",
+                Icon = SysDrawing.SystemIcons.Application,
+                Visible = false
+            };
+
+            // Double-click tray icon to restore window
+            _trayIcon.DoubleClick += (s, e) =>
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+                _trayIcon.Visible = false;
+            };
+
+            // Right-click context menu
+            var menu = new SysForms.ContextMenuStrip();
+            menu.Items.Add("Show", null, (s, e) =>
+            {
+                Show();
+                WindowState = WindowState.Normal;
+                Activate();
+                _trayIcon.Visible = false;
+            });
+            menu.Items.Add("Exit", null, (s, e) => Close());
+            _trayIcon.ContextMenuStrip = menu;
+        }
+
+        private void TrayButton_Click(object sender, RoutedEventArgs e)
+        {
+            Hide();
+            if (_trayIcon != null)
+                _trayIcon.Visible = true;
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -140,6 +183,12 @@ namespace ScreenFind
         protected override void OnClosed(EventArgs e)
         {
             _currentOverlay?.Close();
+
+            if (_trayIcon != null)
+            {
+                _trayIcon.Visible = false;
+                _trayIcon.Dispose();
+            }
 
             var helper = new WindowInteropHelper(this);
             UnregisterHotKey(helper.Handle, HOTKEY_ID);
