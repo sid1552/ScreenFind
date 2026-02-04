@@ -314,7 +314,10 @@ namespace ScreenFind
 
             foreach (var m in _matches)
             {
-                var rect = MakeRect(m.Bounds, MatchStroke, 2, MatchFill, 3);
+                var padded = new Rect(
+                    m.Bounds.X - 4, m.Bounds.Y - 4,
+                    m.Bounds.Width + 8, m.Bounds.Height + 8);
+                var rect = MakeRect(padded, MatchStroke, 2, MatchFill, 5);
                 HighlightCanvas.Children.Add(rect);
             }
         }
@@ -329,10 +332,10 @@ namespace ScreenFind
             var m = _matches[_currentIndex];
             // Slightly larger rect with a brighter color
             var inflated = new Rect(
-                m.Bounds.X - 2, m.Bounds.Y - 2,
-                m.Bounds.Width + 4, m.Bounds.Height + 4);
+                m.Bounds.X - 6, m.Bounds.Y - 6,
+                m.Bounds.Width + 12, m.Bounds.Height + 12);
 
-            var rect = MakeRect(inflated, CurrentStroke, 3, CurrentFill, 5);
+            var rect = MakeRect(inflated, CurrentStroke, 3, CurrentFill, 7);
             HighlightCanvas.Children.Add(rect);
         }
 
