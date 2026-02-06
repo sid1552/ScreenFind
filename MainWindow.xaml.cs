@@ -48,6 +48,7 @@ namespace ScreenFind
             _hotkeyModifiers = _settings.HotkeyModifiers;
             _hotkeyKey = _settings.HotkeyKey;
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
+            DragToSelectCheckbox.IsChecked = _settings.DragToSelect;
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
@@ -85,6 +86,13 @@ namespace ScreenFind
             });
             menu.Items.Add("Exit", null, (s, e) => Close());
             _trayIcon.ContextMenuStrip = menu;
+        }
+
+        private void DragToSelectCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return; // fired during InitializeComponent before settings loaded
+            _settings.DragToSelect = DragToSelectCheckbox.IsChecked == true;
+            _settings.Save();
         }
 
         private void EnhanceOcrCheckbox_Changed(object sender, RoutedEventArgs e)
@@ -255,7 +263,7 @@ namespace ScreenFind
                 var bitmap = CaptureScreen();
 
                 // Show the search overlay
-                _currentOverlay = new OverlayWindow(bitmap, _settings.EnhanceOcr);
+                _currentOverlay = new OverlayWindow(bitmap, _settings.EnhanceOcr, _settings.DragToSelect);
                 _currentOverlay.Closed += (s, e) => _currentOverlay = null;
                 _currentOverlay.Show();
             }

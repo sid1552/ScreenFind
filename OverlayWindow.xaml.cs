@@ -18,6 +18,7 @@ namespace ScreenFind
         // ─── OCR data ──────────────────────────────────────────────────
         private readonly SysDrawing.Bitmap _capturedBitmap;
         private readonly bool _enhanceOcr;
+        private readonly bool _dragToSelect;
         private List<OcrLineInfo>? _ocrLines;
         private bool _ocrCompleted;
 
@@ -29,12 +30,19 @@ namespace ScreenFind
         private double _scaleX = 1.0;
         private double _scaleY = 1.0;
 
+        // ─── Drag-to-select state ────────────────────────────────────────
+        private bool _isDragging;
+        private Point _dragStartDip;              // mouse-down position in WPF DIPs
+        private Rectangle? _lassoRect;            // the visual drag rectangle
+        private List<OcrWordInfo> _selectedWords = new();
+
         // ────────────────────────────────────────────────────────────────
-        public OverlayWindow(SysDrawing.Bitmap screenshot, bool enhanceOcr = false)
+        public OverlayWindow(SysDrawing.Bitmap screenshot, bool enhanceOcr = false, bool dragToSelect = true)
         {
             InitializeComponent();
             _capturedBitmap = screenshot;
             _enhanceOcr = enhanceOcr;
+            _dragToSelect = dragToSelect;
             Loaded += OverlayWindow_Loaded;
         }
 
@@ -61,10 +69,15 @@ namespace ScreenFind
             // 3. Show the captured screenshot as background
             SetScreenshotBackground();
 
-            // 4. Focus the search box immediately (user can start typing)
+            // 4. Wire up selection canvas mouse events
+            SelectionCanvas.MouseLeftButtonDown += SelectionCanvas_MouseLeftButtonDown;
+            SelectionCanvas.MouseMove += SelectionCanvas_MouseMove;
+            SelectionCanvas.MouseLeftButtonUp += SelectionCanvas_MouseLeftButtonUp;
+
+            // 5. Focus the search box immediately (user can start typing)
             SearchBox.Focus();
 
-            // 5. Run OCR in the background
+            // 6. Run OCR in the background
             await RunOcrAsync();
         }
 
@@ -192,6 +205,13 @@ namespace ScreenFind
                     {
                         LoadingBadge.Visibility = Visibility.Collapsed;
 
+                        // Enable drag-to-select now that OCR data is ready (if enabled)
+                        if (_dragToSelect)
+                        {
+                            SelectionCanvas.IsHitTestVisible = true;
+                            SelectionCanvas.Cursor = Cursors.Cross;
+                        }
+
                         // If the user already typed something while OCR was running,
                         // apply the search now
                         if (!string.IsNullOrEmpty(SearchBox.Text))
@@ -220,6 +240,10 @@ namespace ScreenFind
 
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
+            // Clear any drag selection when the user types
+            SelectionCanvas.Children.Clear();
+            _selectedWords.Clear();
+
             if (_ocrCompleted)
                 UpdateHighlights(SearchBox.Text);
         }
@@ -343,6 +367,18 @@ namespace ScreenFind
             new(Color.FromArgb(255, 30, 120, 255));
         private static readonly SolidColorBrush CurrentFuzzyFill =
             new(Color.FromArgb(110, 30, 120, 255));
+
+        // Drag-to-select colors (green)
+        private static readonly SolidColorBrush SelectionStroke =
+            new(Color.FromArgb(255, 50, 205, 50));
+        private static readonly SolidColorBrush SelectionFill =
+            new(Color.FromArgb(55, 50, 205, 50));
+
+        // Lasso rectangle (white dashed)
+        private static readonly SolidColorBrush LassoStroke =
+            new(Color.FromArgb(180, 255, 255, 255));
+        private static readonly SolidColorBrush LassoFill =
+            new(Color.FromArgb(20, 255, 255, 255));
 
         /// <summary>
         /// Draw yellow highlight rectangles for every match.
@@ -505,7 +541,7 @@ namespace ScreenFind
             var text = _matches[index].Text;
             if (string.IsNullOrEmpty(text)) return;
 
-            Clipboard.SetText(text);
+            TrySetClipboard(text);
 
             // Brief "Copied!" feedback in the match info area
             var savedText = MatchInfo.Text;
@@ -530,7 +566,7 @@ namespace ScreenFind
             var text = _matches[_currentIndex].Text;
             if (string.IsNullOrEmpty(text)) return;
 
-            Clipboard.SetText(text);
+            TrySetClipboard(text);
 
             // Brief "Copied!" feedback in the match info area
             var savedText = MatchInfo.Text;
@@ -547,6 +583,238 @@ namespace ScreenFind
                 MatchInfo.Text = savedText;
             };
             timer.Start();
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  DRAG-TO-SELECT
+        // ════════════════════════════════════════════════════════════════
+
+        private void SelectionCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
+        {
+            var clickPosDip = e.GetPosition(SelectionCanvas);
+
+            // Check if the click is on an existing match highlight — forward to click-to-copy
+            if (_matches.Count > 0)
+            {
+                for (int i = 0; i < _matches.Count; i++)
+                {
+                    // Convert match bounds (physical pixels) to DIPs for hit-testing
+                    var b = _matches[i].Bounds;
+                    var dipRect = new Rect(
+                        b.X / _scaleX - 4, b.Y / _scaleY - 4,
+                        b.Width / _scaleX + 8, b.Height / _scaleY + 8);
+
+                    if (dipRect.Contains(clickPosDip))
+                    {
+                        CopyMatchText(i);
+                        e.Handled = true;
+                        return;
+                    }
+                }
+            }
+
+            // Start a new drag selection
+            _isDragging = true;
+            _dragStartDip = clickPosDip;
+            _selectedWords.Clear();
+            SelectionCanvas.Children.Clear();
+
+            // Create the dashed lasso rectangle
+            _lassoRect = new Rectangle
+            {
+                Stroke = LassoStroke,
+                StrokeThickness = 1.5,
+                StrokeDashArray = new DoubleCollection { 4, 3 },
+                Fill = LassoFill,
+                Width = 0,
+                Height = 0,
+                IsHitTestVisible = false
+            };
+            Canvas.SetLeft(_lassoRect, clickPosDip.X);
+            Canvas.SetTop(_lassoRect, clickPosDip.Y);
+            SelectionCanvas.Children.Add(_lassoRect);
+
+            SelectionCanvas.CaptureMouse();
+            e.Handled = true;
+        }
+
+        private void SelectionCanvas_MouseMove(object sender, MouseEventArgs e)
+        {
+            if (!_isDragging || _lassoRect == null) return;
+
+            var currentPos = e.GetPosition(SelectionCanvas);
+
+            // Update lasso rect position and size
+            double x = Math.Min(_dragStartDip.X, currentPos.X);
+            double y = Math.Min(_dragStartDip.Y, currentPos.Y);
+            double w = Math.Abs(currentPos.X - _dragStartDip.X);
+            double h = Math.Abs(currentPos.Y - _dragStartDip.Y);
+
+            Canvas.SetLeft(_lassoRect, x);
+            Canvas.SetTop(_lassoRect, y);
+            _lassoRect.Width = w;
+            _lassoRect.Height = h;
+
+            // Convert DIP lasso rect → physical pixels for OCR bounds comparison
+            var physicalRect = new Rect(
+                x * _scaleX, y * _scaleY,
+                w * _scaleX, h * _scaleY);
+
+            UpdateSelectionHighlights(physicalRect);
+        }
+
+        private void SelectionCanvas_MouseLeftButtonUp(object sender, MouseButtonEventArgs e)
+        {
+            if (!_isDragging) return;
+
+            _isDragging = false;
+            SelectionCanvas.ReleaseMouseCapture();
+
+            // Remove the lasso rect (keep word highlights)
+            if (_lassoRect != null)
+            {
+                SelectionCanvas.Children.Remove(_lassoRect);
+                _lassoRect = null;
+            }
+
+            if (_selectedWords.Count > 0)
+            {
+                // Sort words in reading order and build text
+                var text = BuildSelectedText(_selectedWords);
+                TrySetClipboard(text);
+                ShowSelectionCopiedFeedback(text);
+            }
+
+            // Re-focus the search box so keyboard shortcuts keep working
+            SearchBox.Focus();
+            e.Handled = true;
+        }
+
+        /// <summary>
+        /// Find all OCR words that intersect the lasso rect and draw green highlights.
+        /// </summary>
+        private void UpdateSelectionHighlights(Rect physicalLassoRect)
+        {
+            // Remove everything except the lasso rect
+            var toRemove = SelectionCanvas.Children.Cast<UIElement>()
+                .Where(c => c != _lassoRect).ToList();
+            foreach (var child in toRemove)
+                SelectionCanvas.Children.Remove(child);
+
+            _selectedWords.Clear();
+
+            if (_ocrLines == null) return;
+
+            foreach (var line in _ocrLines)
+            {
+                foreach (var word in line.Words)
+                {
+                    if (word.Bounds.IntersectsWith(physicalLassoRect))
+                    {
+                        _selectedWords.Add(word);
+
+                        // Draw green highlight (coords in physical pixels → convert to DIPs)
+                        var r = new Rectangle
+                        {
+                            Stroke = SelectionStroke,
+                            StrokeThickness = 1.5,
+                            Fill = SelectionFill,
+                            Width = word.Bounds.Width / _scaleX + 4,
+                            Height = word.Bounds.Height / _scaleY + 4,
+                            RadiusX = 3,
+                            RadiusY = 3,
+                            IsHitTestVisible = false
+                        };
+                        Canvas.SetLeft(r, word.Bounds.X / _scaleX - 2);
+                        Canvas.SetTop(r, word.Bounds.Y / _scaleY - 2);
+                        SelectionCanvas.Children.Add(r);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        /// Build readable text from selected words — grouped into lines by Y proximity,
+        /// sorted left-to-right within each line.
+        /// </summary>
+        private static string BuildSelectedText(List<OcrWordInfo> words)
+        {
+            if (words.Count == 0) return "";
+
+            // Sort by Y first, then X
+            var sorted = words.OrderBy(w => w.Bounds.Y).ThenBy(w => w.Bounds.X).ToList();
+
+            var lines = new List<List<OcrWordInfo>>();
+            var currentLine = new List<OcrWordInfo> { sorted[0] };
+
+            for (int i = 1; i < sorted.Count; i++)
+            {
+                // If this word's Y is close to the previous word's Y, same line
+                double threshold = sorted[i].Bounds.Height * 0.5;
+                if (Math.Abs(sorted[i].Bounds.Y - currentLine[0].Bounds.Y) < threshold)
+                {
+                    currentLine.Add(sorted[i]);
+                }
+                else
+                {
+                    lines.Add(currentLine);
+                    currentLine = new List<OcrWordInfo> { sorted[i] };
+                }
+            }
+            lines.Add(currentLine);
+
+            // Sort each line left-to-right, join words with spaces, join lines with newlines
+            return string.Join("\n",
+                lines.Select(line =>
+                    string.Join(" ", line.OrderBy(w => w.Bounds.X).Select(w => w.Text))));
+        }
+
+        /// <summary>
+        /// Show "Copied!" feedback in the match info area for drag-selected text.
+        /// </summary>
+        private void ShowSelectionCopiedFeedback(string text)
+        {
+            var truncated = text.Length > 60 ? text.Substring(0, 60) + "..." : text;
+            // Replace newlines with spaces for display
+            truncated = truncated.Replace("\n", " ").Replace("\r", "");
+
+            var savedText = MatchInfo.Text;
+            MatchInfo.Text = $"Copied: \"{truncated}\"";
+
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1.5)
+            };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                MatchInfo.Text = savedText;
+            };
+            timer.Start();
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  CLIPBOARD HELPER
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Try to set clipboard text with retries — the clipboard can be locked
+        /// by other apps, causing CLIPBRD_E_CANT_OPEN (COMException).
+        /// </summary>
+        private static void TrySetClipboard(string text)
+        {
+            for (int i = 0; i < 5; i++)
+            {
+                try
+                {
+                    Clipboard.SetText(text);
+                    return;
+                }
+                catch (System.Runtime.InteropServices.COMException)
+                {
+                    System.Threading.Thread.Sleep(50);
+                }
+            }
         }
 
         // ════════════════════════════════════════════════════════════════

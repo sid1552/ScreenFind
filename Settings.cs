@@ -7,6 +7,7 @@ namespace ScreenFind
     public class Settings
     {
         public bool EnhanceOcr { get; set; } = false;
+        public bool DragToSelect { get; set; } = true;
 
         // Hotkey config — defaults to Ctrl+Shift (0x0006) + F (0x46)
         public uint HotkeyModifiers { get; set; } = 0x0006;

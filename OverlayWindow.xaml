@@ -20,7 +20,10 @@
         <!-- Layer 3: Highlight rectangles are drawn here -->
         <Canvas x:Name="HighlightCanvas" />
 
-        <!-- Layer 4: Search bar (Spotlight-style) -->
+        <!-- Layer 4: Drag-to-select overlay (enabled after OCR completes) -->
+        <Canvas x:Name="SelectionCanvas" Background="Transparent" IsHitTestVisible="False" />
+
+        <!-- Layer 5: Search bar (Spotlight-style) -->
         <Border x:Name="SearchBarBorder"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
@@ -96,6 +99,8 @@
                 <Run Text=" copy" Foreground="#6C7086"/>
                 <Run Text="    Click match" />
                 <Run Text=" copy" Foreground="#6C7086"/>
+                <Run Text="    Drag" />
+                <Run Text=" select text" Foreground="#6C7086"/>
                 <Run Text="    Esc" />
                 <Run Text=" close" Foreground="#6C7086"/>
             </TextBlock>
