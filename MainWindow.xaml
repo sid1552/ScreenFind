@@ -219,6 +219,46 @@
                     </CheckBox.Style>
                 </CheckBox>
 
+                <!-- PaddleOCR engine checkbox -->
+                <CheckBox x:Name="PaddleOcrCheckbox"
+                          Content="Use PaddleOCR engine (more accurate, slower, larger app size)"
+                          FontSize="12" Foreground="#A6ADC8"
+                          HorizontalAlignment="Center" Margin="0,14,0,0"
+                          Checked="PaddleOcrCheckbox_Changed"
+                          Unchecked="PaddleOcrCheckbox_Changed">
+                    <CheckBox.Style>
+                        <Style TargetType="CheckBox">
+                            <Setter Property="Template">
+                                <Setter.Value>
+                                    <ControlTemplate TargetType="CheckBox">
+                                        <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Border x:Name="box" Width="18" Height="18"
+                                                    Background="#45475A" CornerRadius="4"
+                                                    BorderBrush="#585B70" BorderThickness="1"
+                                                    VerticalAlignment="Center" Margin="0,0,8,0">
+                                                <TextBlock x:Name="check" Text="&#x2713;"
+                                                           Foreground="#A6E3A1" FontSize="13" FontWeight="Bold"
+                                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                                           Visibility="Collapsed"/>
+                                            </Border>
+                                            <ContentPresenter VerticalAlignment="Center"/>
+                                        </StackPanel>
+                                        <ControlTemplate.Triggers>
+                                            <Trigger Property="IsChecked" Value="True">
+                                                <Setter TargetName="check" Property="Visibility" Value="Visible"/>
+                                                <Setter TargetName="box" Property="BorderBrush" Value="#A6E3A1"/>
+                                            </Trigger>
+                                            <Trigger Property="IsMouseOver" Value="True">
+                                                <Setter TargetName="box" Property="Background" Value="#585B70"/>
+                                            </Trigger>
+                                        </ControlTemplate.Triggers>
+                                    </ControlTemplate>
+                                </Setter.Value>
+                            </Setter>
+                        </Style>
+                    </CheckBox.Style>
+                </CheckBox>
+
                 <!-- Monitors section -->
                 <TextBlock Text="Monitors"
                            FontSize="13" Foreground="#A6ADC8" FontWeight="SemiBold"

@@ -51,11 +51,16 @@ namespace ScreenFind
             _hotkeyModifiers = _settings.HotkeyModifiers;
             _hotkeyKey = _settings.HotkeyKey;
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
+            PaddleOcrCheckbox.IsChecked = _settings.UsePaddleOcr;
             DragToSelectCheckbox.IsChecked = _settings.DragToSelect;
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             PopulateMonitorList();
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
+
+            // If PaddleOCR was enabled from a previous session, pre-load models now
+            if (_settings.UsePaddleOcr)
+                PaddleOcrEngineManager.Warmup();
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -151,6 +156,19 @@ namespace ScreenFind
             if (_settings == null) return; // fired during InitializeComponent before settings loaded
             _settings.EnhanceOcr = EnhanceOcrCheckbox.IsChecked == true;
             _settings.Save();
+        }
+
+        private void PaddleOcrCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return; // fired during InitializeComponent before settings loaded
+            _settings.UsePaddleOcr = PaddleOcrCheckbox.IsChecked == true;
+            _settings.Save();
+
+            // Pre-load PaddleOCR models in background so the first capture is fast.
+            // Model loading takes ~1-2 seconds — doing it now means the user won't
+            // wait when they trigger the overlay.
+            if (_settings.UsePaddleOcr)
+                PaddleOcrEngineManager.Warmup();
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -485,7 +503,7 @@ namespace ScreenFind
                     var overlay = new OverlayWindow(
                         bitmap, screen,
                         _settings.EnhanceOcr, _settings.DragToSelect,
-                        isPrimary);
+                        isPrimary, _settings.UsePaddleOcr);
                     _allOverlays.Add(overlay);
 
                     if (isPrimary)

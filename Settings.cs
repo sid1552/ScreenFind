@@ -8,6 +8,7 @@ namespace ScreenFind
     public class Settings
     {
         public bool EnhanceOcr { get; set; } = false;
+        public bool UsePaddleOcr { get; set; } = false;
         public bool DragToSelect { get; set; } = true;
 
         // Monitor exclusion — stores DeviceNames of unchecked monitors

@@ -62,6 +62,7 @@ Every major antivirus engine — **Windows Defender, Kaspersky, Norton, Malwareb
 - **Click-to-copy** — click any match highlight to copy its text
 - **Drag-to-select** — lasso any text on screen, auto-copied to clipboard (toggleable)
 - **Customizable hotkey** — click the hotkey display in the main window to record a new one
+- **PaddleOCR engine** — optional high-accuracy OCR engine (opt-in in Settings). More accurate than Windows OCR on small/low-contrast text, but uses ~600 MB RAM (vs ~150 MB with Windows OCR) and takes ~5-6 seconds longer per capture
 - **Enhanced OCR mode** — optional image preprocessing for low-contrast text and desktop icons
 - **System tray** — minimize to tray, runs silently in background
 - **Multi-monitor support** — captures all monitors simultaneously, each gets its own overlay. Choose which monitors to include in Settings.
@@ -165,7 +166,8 @@ Hotkey pressed
 
 - **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor
 - **Multi-monitor**: Each screen gets its own overlay; the primary monitor hosts the search bar, and search results sync across all overlays
-- **OCR**: `Windows.Media.Ocr.OcrEngine` — built into Windows, returns word-level bounding boxes
+- **OCR**: `Windows.Media.Ocr.OcrEngine` (default) — built into Windows, fast, returns word-level bounding boxes
+- **OCR (optional)**: PaddleOCR via `PaddleOCRSharp` — more accurate, CPU-intensive (~5-6s extra, ~600 MB RAM)
 - **Image preprocessing**: Optional grayscale + contrast boost for difficult text
 - **Overlay**: WPF borderless topmost window with canvas-drawn highlights
 - **DPI**: Fully handled per monitor — works at 100%, 125%, 150%, 200% scaling
