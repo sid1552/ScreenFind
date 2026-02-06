@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Controls;
 using System.Windows.Media;
 using SysDrawing = System.Drawing;
 using SysForms = System.Windows.Forms;
@@ -52,8 +53,56 @@ namespace ScreenFind
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
             DragToSelectCheckbox.IsChecked = _settings.DragToSelect;
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
+            PopulateMonitorList();
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  Tab switching (Settings / About)
+        // ────────────────────────────────────────────────────────────────
+        private void SettingsTab_Click(object sender, MouseButtonEventArgs e)
+        {
+            SwitchTab("settings");
+        }
+
+        private void AboutTab_Click(object sender, MouseButtonEventArgs e)
+        {
+            SwitchTab("about");
+        }
+
+        private void SwitchTab(string tabName)
+        {
+            var activeColor = (Color)ColorConverter.ConvertFromString("#CDD6F4");
+            var inactiveColor = (Color)ColorConverter.ConvertFromString("#585B70");
+            var accentBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CBA6F7"));
+            var transparentBrush = Brushes.Transparent;
+
+            if (tabName == "settings")
+            {
+                SettingsPanel.Visibility = Visibility.Visible;
+                AboutPanel.Visibility = Visibility.Collapsed;
+
+                SettingsTabText.Foreground = new SolidColorBrush(activeColor);
+                SettingsTabBorder.BorderBrush = accentBrush;
+
+                AboutTabText.Foreground = new SolidColorBrush(inactiveColor);
+                AboutTabBorder.BorderBrush = transparentBrush;
+            }
+            else
+            {
+                SettingsPanel.Visibility = Visibility.Collapsed;
+                AboutPanel.Visibility = Visibility.Visible;
+
+                AboutTabText.Foreground = new SolidColorBrush(activeColor);
+                AboutTabBorder.BorderBrush = accentBrush;
+
+                SettingsTabText.Foreground = new SolidColorBrush(inactiveColor);
+                SettingsTabBorder.BorderBrush = transparentBrush;
+
+                // Update the hotkey label in the About panel to reflect current hotkey
+                AboutHotkeyLabel.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
+            }
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -102,6 +151,161 @@ namespace ScreenFind
             if (_settings == null) return; // fired during InitializeComponent before settings loaded
             _settings.EnhanceOcr = EnhanceOcrCheckbox.IsChecked == true;
             _settings.Save();
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  Monitor picker — dynamically build checkboxes for each screen
+        // ────────────────────────────────────────────────────────────────
+        private void PopulateMonitorList()
+        {
+            MonitorListPanel.Children.Clear();
+
+            var screens = SysForms.Screen.AllScreens;
+            for (int i = 0; i < screens.Length; i++)
+            {
+                var screen = screens[i];
+                var bounds = screen.Bounds;
+
+                // Build label like "Monitor 1 — 1920×1080 (Primary)"
+                string label = $"Monitor {i + 1} — {bounds.Width}\u00D7{bounds.Height}";
+                if (screen.Primary)
+                    label += " (Primary)";
+
+                bool isChecked = !_settings.ExcludedMonitors.Contains(screen.DeviceName);
+
+                var cb = new CheckBox
+                {
+                    Content = label,
+                    IsChecked = isChecked,
+                    Tag = screen.DeviceName, // store device name for the handler
+                    FontSize = 12,
+                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#A6ADC8")),
+                    HorizontalAlignment = HorizontalAlignment.Center,
+                    Margin = new Thickness(0, 6, 0, 0)
+                };
+
+                // Apply the same Catppuccin checkbox template as the XAML checkboxes
+                cb.Style = BuildCheckboxStyle();
+
+                cb.Checked += MonitorCheckbox_Changed;
+                cb.Unchecked += MonitorCheckbox_Changed;
+
+                MonitorListPanel.Children.Add(cb);
+            }
+        }
+
+        /// <summary>
+        /// Builds the Catppuccin-themed CheckBox Style in code,
+        /// matching the DragToSelect / EnhanceOcr checkbox template in XAML.
+        /// </summary>
+        private static Style BuildCheckboxStyle()
+        {
+            // Colors matching the XAML theme
+            var bgColor = (Color)ColorConverter.ConvertFromString("#45475A");
+            var borderColor = (Color)ColorConverter.ConvertFromString("#585B70");
+            var checkColor = (Color)ColorConverter.ConvertFromString("#A6E3A1");
+            var hoverColor = (Color)ColorConverter.ConvertFromString("#585B70");
+
+            // Build the ControlTemplate
+            var template = new ControlTemplate(typeof(CheckBox));
+
+            // Root: horizontal StackPanel
+            var stackFactory = new FrameworkElementFactory(typeof(StackPanel));
+            stackFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
+            stackFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+
+            // Box border
+            var boxFactory = new FrameworkElementFactory(typeof(Border), "box");
+            boxFactory.SetValue(FrameworkElement.WidthProperty, 18.0);
+            boxFactory.SetValue(FrameworkElement.HeightProperty, 18.0);
+            boxFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(bgColor));
+            boxFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
+            boxFactory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(borderColor));
+            boxFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
+            boxFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            boxFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
+
+            // Checkmark text inside the box
+            var checkFactory = new FrameworkElementFactory(typeof(TextBlock), "check");
+            checkFactory.SetValue(TextBlock.TextProperty, "\u2713");
+            checkFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(checkColor));
+            checkFactory.SetValue(TextBlock.FontSizeProperty, 13.0);
+            checkFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
+            checkFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
+            checkFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            checkFactory.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
+
+            boxFactory.AppendChild(checkFactory);
+            stackFactory.AppendChild(boxFactory);
+
+            // Content presenter
+            var contentFactory = new FrameworkElementFactory(typeof(ContentPresenter));
+            contentFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
+            stackFactory.AppendChild(contentFactory);
+
+            template.VisualTree = stackFactory;
+
+            // Trigger: IsChecked = True → show checkmark + green border
+            var checkedTrigger = new Trigger { Property = CheckBox.IsCheckedProperty, Value = true };
+            checkedTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "check"));
+            checkedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(checkColor), "box"));
+            template.Triggers.Add(checkedTrigger);
+
+            // Trigger: IsMouseOver = True → lighter background
+            var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
+            hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(hoverColor), "box"));
+            template.Triggers.Add(hoverTrigger);
+
+            // Wrap in a Style
+            var style = new Style(typeof(CheckBox));
+            style.Setters.Add(new Setter(Control.TemplateProperty, template));
+            return style;
+        }
+
+        private void MonitorCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+
+            var cb = (CheckBox)sender;
+            var deviceName = (string)cb.Tag;
+
+            if (cb.IsChecked == true)
+            {
+                // Checked → remove from exclusion list
+                _settings.ExcludedMonitors.Remove(deviceName);
+            }
+            else
+            {
+                // Unchecked — but don't allow unchecking the last one
+                int checkedCount = 0;
+                foreach (CheckBox child in MonitorListPanel.Children)
+                {
+                    if (child.IsChecked == true)
+                        checkedCount++;
+                }
+
+                if (checkedCount == 0)
+                {
+                    // Re-check it — can't have zero monitors
+                    cb.IsChecked = true;
+                    return;
+                }
+
+                // Add to exclusion list
+                if (!_settings.ExcludedMonitors.Contains(deviceName))
+                    _settings.ExcludedMonitors.Add(deviceName);
+            }
+
+            _settings.Save();
+        }
+
+        private void GithubLink_Click(object sender, MouseButtonEventArgs e)
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "https://github.com/sid1552/ScreenFind",
+                UseShellExecute = true
+            });
         }
 
         private void TrayButton_Click(object sender, RoutedEventArgs e)
@@ -258,14 +462,26 @@ namespace ScreenFind
 
             try
             {
-                // Capture ALL monitors
-                var captures = CaptureAllScreens();
+                // Capture all non-excluded monitors
+                var captures = CaptureAllScreens()
+                    .Where(c => !_settings.ExcludedMonitors.Contains(c.Screen.DeviceName))
+                    .ToList();
+
+                // Fallback: if somehow all are excluded, capture primary only
+                if (captures.Count == 0)
+                {
+                    captures = CaptureAllScreens()
+                        .Where(c => c.Screen.Primary)
+                        .ToList();
+                }
 
                 OverlayWindow? primaryOverlay = null;
 
                 foreach (var (screen, bitmap) in captures)
                 {
-                    bool isPrimary = screen.Primary;
+                    // If the original primary is included, it gets the search bar.
+                    // Otherwise the first screen in the list becomes "primary" (gets search bar).
+                    bool isPrimary = screen.Primary || (primaryOverlay == null && !captures.Any(c => c.Screen.Primary));
                     var overlay = new OverlayWindow(
                         bitmap, screen,
                         _settings.EnhanceOcr, _settings.DragToSelect,
