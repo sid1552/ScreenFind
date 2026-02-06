@@ -2,25 +2,46 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Threading.Tasks;
 using System.Windows;
 using System.Windows.Controls;
 using System.Windows.Input;
+using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
 using SysDrawing = System.Drawing;
+using SysForms = System.Windows.Forms;
 
 namespace ScreenFind
 {
     public partial class OverlayWindow : Window
     {
+        // ─── Win32 for precise multi-monitor positioning ──────────────
+        [DllImport("user32.dll", SetLastError = true)]
+        private static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
+
+        [DllImport("user32.dll")]
+        private static extern uint GetDpiForWindow(IntPtr hwnd);
+
         // ─── OCR data ──────────────────────────────────────────────────
         private readonly SysDrawing.Bitmap _capturedBitmap;
         private readonly bool _enhanceOcr;
         private readonly bool _dragToSelect;
         private List<OcrLineInfo>? _ocrLines;
         private bool _ocrCompleted;
+
+        // ─── Multi-monitor ─────────────────────────────────────────────
+        private readonly SysForms.Screen _targetScreen;
+        private readonly bool _isPrimary;
+        private string _pendingQuery = "";   // search query from primary (for secondaries)
+
+        // ─── Events for cross-monitor coordination ─────────────────────
+        /// <summary>Fired by primary when the search query changes.</summary>
+        public event Action<string>? SearchChanged;
+        /// <summary>Fired when Escape is pressed — tells MainWindow to close all overlays.</summary>
+        public event Action? CloseAllRequested;
 
         // ─── Search state ──────────────────────────────────────────────
         private List<MatchResult> _matches = new();
@@ -41,12 +62,16 @@ namespace ScreenFind
         private string _savedMatchInfoText = "";
 
         // ────────────────────────────────────────────────────────────────
-        public OverlayWindow(SysDrawing.Bitmap screenshot, bool enhanceOcr = false, bool dragToSelect = true)
+        public OverlayWindow(SysDrawing.Bitmap screenshot, SysForms.Screen targetScreen,
+            bool enhanceOcr = false, bool dragToSelect = true, bool isPrimary = true)
         {
             InitializeComponent();
             _capturedBitmap = screenshot;
+            _targetScreen = targetScreen;
             _enhanceOcr = enhanceOcr;
             _dragToSelect = dragToSelect;
+            _isPrimary = isPrimary;
+            Opacity = 0; // hidden until positioned on correct monitor
             Loaded += OverlayWindow_Loaded;
         }
 
@@ -54,34 +79,51 @@ namespace ScreenFind
         //  INITIALIZATION
         // ════════════════════════════════════════════════════════════════
 
+        /// <summary>
+        /// Fires after HWND is created but BEFORE first render — positions the window
+        /// on the correct monitor so there's no visible scaling flash.
+        /// </summary>
+        protected override void OnSourceInitialized(EventArgs e)
+        {
+            base.OnSourceInitialized(e);
+
+            // Position window on target monitor BEFORE first render
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var bounds = _targetScreen.Bounds;
+            MoveWindow(hwnd, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
+
+            // Get DPI directly from Win32 — reliable immediately after MoveWindow
+            // (PresentationSource may still report the old monitor's DPI at this point)
+            uint dpi = GetDpiForWindow(hwnd);
+            _scaleX = dpi / 96.0;
+            _scaleY = dpi / 96.0;
+
+            Opacity = 1;
+        }
+
         private async void OverlayWindow_Loaded(object sender, RoutedEventArgs e)
         {
-            // 1. Get DPI scale so we can convert pixel coords → DIPs
-            var source = PresentationSource.FromVisual(this);
-            if (source?.CompositionTarget != null)
-            {
-                _scaleX = source.CompositionTarget.TransformToDevice.M11;
-                _scaleY = source.CompositionTarget.TransformToDevice.M22;
-            }
-
-            // 2. Size the window to cover the full primary screen (in DIPs)
-            Left = 0;
-            Top = 0;
-            Width  = SystemParameters.PrimaryScreenWidth;
-            Height = SystemParameters.PrimaryScreenHeight;
-
-            // 3. Show the captured screenshot as background
+            // 1. Show the captured screenshot as background
             SetScreenshotBackground();
 
-            // 4. Wire up selection canvas mouse events
+            // 4. Wire up selection canvas mouse events (drag-to-select works on ALL monitors)
             SelectionCanvas.MouseLeftButtonDown += SelectionCanvas_MouseLeftButtonDown;
             SelectionCanvas.MouseMove += SelectionCanvas_MouseMove;
             SelectionCanvas.MouseLeftButtonUp += SelectionCanvas_MouseLeftButtonUp;
 
-            // 5. Focus the search box immediately (user can start typing)
-            SearchBox.Focus();
+            if (_isPrimary)
+            {
+                // 5. Focus the search box immediately (primary only)
+                SearchBox.Focus();
+            }
+            else
+            {
+                // Secondary monitors: hide search bar and loading badge
+                SearchBarBorder.Visibility = Visibility.Collapsed;
+                LoadingBadge.Visibility = Visibility.Collapsed;
+            }
 
-            // 6. Run OCR in the background
+            // 6. Run OCR in the background (each monitor runs its own OCR)
             await RunOcrAsync();
         }
 
@@ -207,7 +249,8 @@ namespace ScreenFind
 
                     Dispatcher.Invoke(() =>
                     {
-                        LoadingBadge.Visibility = Visibility.Collapsed;
+                        if (_isPrimary)
+                            LoadingBadge.Visibility = Visibility.Collapsed;
 
                         // Enable drag-to-select now that OCR data is ready (if enabled)
                         if (_dragToSelect)
@@ -216,10 +259,12 @@ namespace ScreenFind
                             SelectionCanvas.Cursor = Cursors.Cross;
                         }
 
-                        // If the user already typed something while OCR was running,
-                        // apply the search now
-                        if (!string.IsNullOrEmpty(SearchBox.Text))
-                            UpdateHighlights(SearchBox.Text);
+                        // Apply any pending search query
+                        // Primary: user may have typed while OCR was running
+                        // Secondary: primary may have broadcast a query before OCR finished
+                        var query = _isPrimary ? SearchBox.Text : _pendingQuery;
+                        if (!string.IsNullOrEmpty(query))
+                            UpdateHighlights(query);
                     });
                 }
                 finally
@@ -250,6 +295,24 @@ namespace ScreenFind
 
             if (_ocrCompleted)
                 UpdateHighlights(SearchBox.Text);
+
+            // Broadcast search query to secondary overlays
+            SearchChanged?.Invoke(SearchBox.Text);
+        }
+
+        /// <summary>
+        /// Called by MainWindow to apply the primary's search query on this (secondary) overlay.
+        /// </summary>
+        public void ApplySearch(string query)
+        {
+            _pendingQuery = query;
+            if (!_ocrCompleted) return;
+
+            // Clear drag selection
+            SelectionCanvas.Children.Clear();
+            _selectedWords.Clear();
+
+            UpdateHighlights(query);
         }
 
         /// <summary>
@@ -497,7 +560,8 @@ namespace ScreenFind
             switch (e.Key)
             {
                 case Key.Escape:
-                    Close();
+                    // Tell MainWindow to close ALL overlays (all monitors)
+                    CloseAllRequested?.Invoke();
                     e.Handled = true;
                     break;
 

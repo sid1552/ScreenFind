@@ -1,4 +1,6 @@
 using System;
+using System.Collections.Generic;
+using System.Linq;
 using System.Runtime.InteropServices;
 using System.Windows;
 using System.Windows.Input;
@@ -30,7 +32,7 @@ namespace ScreenFind
 
         // ─── State ─────────────────────────────────────────────────────
         private HwndSource? _hwndSource;
-        private OverlayWindow? _currentOverlay;
+        private List<OverlayWindow> _allOverlays = new();
         private SysForms.NotifyIcon? _trayIcon;
         private Settings _settings = null!;
 
@@ -251,22 +253,55 @@ namespace ScreenFind
         // ────────────────────────────────────────────────────────────────
         private void OnHotkeyPressed()
         {
-            // Close any existing overlay first
-            if (_currentOverlay != null)
-            {
-                _currentOverlay.Close();
-                _currentOverlay = null;
-            }
+            // Close any existing overlays first
+            CloseAllOverlays();
 
             try
             {
-                // Capture the primary screen (physical pixels)
-                var bitmap = CaptureScreen();
+                // Capture ALL monitors
+                var captures = CaptureAllScreens();
 
-                // Show the search overlay
-                _currentOverlay = new OverlayWindow(bitmap, _settings.EnhanceOcr, _settings.DragToSelect);
-                _currentOverlay.Closed += (s, e) => _currentOverlay = null;
-                _currentOverlay.Show();
+                OverlayWindow? primaryOverlay = null;
+
+                foreach (var (screen, bitmap) in captures)
+                {
+                    bool isPrimary = screen.Primary;
+                    var overlay = new OverlayWindow(
+                        bitmap, screen,
+                        _settings.EnhanceOcr, _settings.DragToSelect,
+                        isPrimary);
+                    _allOverlays.Add(overlay);
+
+                    if (isPrimary)
+                        primaryOverlay = overlay;
+                }
+
+                // Wire search sync: primary broadcasts query to all secondaries
+                if (primaryOverlay != null)
+                {
+                    primaryOverlay.SearchChanged += query =>
+                    {
+                        foreach (var overlay in _allOverlays)
+                        {
+                            if (overlay != primaryOverlay)
+                                overlay.ApplySearch(query);
+                        }
+                    };
+                }
+
+                // Wire Escape: any overlay can close all overlays
+                foreach (var overlay in _allOverlays)
+                {
+                    overlay.CloseAllRequested += () => CloseAllOverlays();
+                }
+
+                // Show all overlays (primary last so it gets focus)
+                foreach (var overlay in _allOverlays)
+                {
+                    if (overlay != primaryOverlay)
+                        overlay.Show();
+                }
+                primaryOverlay?.Show();
             }
             catch (Exception ex)
             {
@@ -278,29 +313,45 @@ namespace ScreenFind
             }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Capture the primary screen using GDI+
-        // ────────────────────────────────────────────────────────────────
-        private static SysDrawing.Bitmap CaptureScreen()
+        private void CloseAllOverlays()
         {
-            var screen = SysForms.Screen.PrimaryScreen!;
-            var bounds = screen.Bounds; // physical pixels (app is DPI-aware)
-
-            var bmp = new SysDrawing.Bitmap(
-                bounds.Width,
-                bounds.Height,
-                SysDrawing.Imaging.PixelFormat.Format32bppArgb);
-
-            using (var g = SysDrawing.Graphics.FromImage(bmp))
+            var overlays = _allOverlays.ToList();
+            _allOverlays.Clear();
+            foreach (var o in overlays)
             {
-                g.CopyFromScreen(
-                    bounds.X, bounds.Y,
-                    0, 0,
-                    bounds.Size,
-                    SysDrawing.CopyPixelOperation.SourceCopy);
+                try { o.Close(); } catch { }
+            }
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  Capture ALL screens using GDI+
+        // ────────────────────────────────────────────────────────────────
+        private static List<(SysForms.Screen Screen, SysDrawing.Bitmap Bitmap)> CaptureAllScreens()
+        {
+            var captures = new List<(SysForms.Screen, SysDrawing.Bitmap)>();
+
+            foreach (var screen in SysForms.Screen.AllScreens)
+            {
+                var bounds = screen.Bounds; // physical pixels (app is DPI-aware)
+
+                var bmp = new SysDrawing.Bitmap(
+                    bounds.Width,
+                    bounds.Height,
+                    SysDrawing.Imaging.PixelFormat.Format32bppArgb);
+
+                using (var g = SysDrawing.Graphics.FromImage(bmp))
+                {
+                    g.CopyFromScreen(
+                        bounds.X, bounds.Y,
+                        0, 0,
+                        new SysDrawing.Size(bounds.Width, bounds.Height),
+                        SysDrawing.CopyPixelOperation.SourceCopy);
+                }
+
+                captures.Add((screen, bmp));
             }
 
-            return bmp;
+            return captures;
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -308,7 +359,7 @@ namespace ScreenFind
         // ────────────────────────────────────────────────────────────────
         protected override void OnClosed(EventArgs e)
         {
-            _currentOverlay?.Close();
+            CloseAllOverlays();
 
             if (_trayIcon != null)
             {
