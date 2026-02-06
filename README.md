@@ -14,7 +14,7 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 
 ## Download
 
-**[Download ScreenFind.exe (v1.0.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
+**[Download ScreenFind.exe (v1.1.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
 
 Standalone exe — just download and double-click. No installation or .NET runtime needed.
 
@@ -43,6 +43,8 @@ Standalone exe — just download and double-click. No installation or .NET runti
 - **Customizable hotkey** — click the hotkey display in the main window to record a new one
 - **Enhanced OCR mode** — optional image preprocessing for low-contrast text and desktop icons
 - **System tray** — minimize to tray, runs silently in background
+- **Multi-monitor support** — captures all monitors simultaneously, each gets its own overlay. Choose which monitors to include in Settings.
+- **Settings & About tabs** — reorganized main window with a clean tabbed UI for all preferences
 - **Settings persistence** — preferences saved to `%AppData%\ScreenFind\settings.json`
 
 ---
@@ -118,7 +120,7 @@ For building from source: **.NET 8 SDK**
 → Go to **Windows Settings → Time & Language → Language** → Make sure you have a language installed with the **Basic typing** option.
 
 **Highlights are offset / wrong position**
-→ This can happen with unusual DPI setups or multi-monitor configurations. Currently supports the primary monitor at any DPI scale.
+→ This can happen with unusual DPI setups. Multi-monitor is fully supported — each monitor gets its own overlay with independent DPI scaling. If a specific monitor causes issues, you can exclude it in Settings.
 
 ---
 
@@ -127,24 +129,26 @@ For building from source: **.NET 8 SDK**
 ```
 Hotkey pressed
     │
-    ├── Screen captured (GDI+ BitBlt)
+    ├── Each monitor captured (GDI+ BitBlt)
     │
-    ├── Overlay window shown instantly
+    ├── One overlay window per monitor shown instantly
     │       ├── Frozen screenshot (dimmed)
-    │       ├── Search bar (ready for input)
-    │       └── Selection canvas (drag-to-select)
+    │       ├── Search bar (primary monitor only)
+    │       ├── Selection canvas (drag-to-select)
+    │       └── Search synced across all overlays
     │
-    └── OCR runs async (~200-500ms)
+    └── OCR runs async per monitor (~200-500ms)
             │
             └── Results ready → search + highlight as you type
 ```
 
-- **Screen capture**: GDI+ `CopyFromScreen` — fast and reliable
+- **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor
+- **Multi-monitor**: Each screen gets its own overlay; the primary monitor hosts the search bar, and search results sync across all overlays
 - **OCR**: `Windows.Media.Ocr.OcrEngine` — built into Windows, returns word-level bounding boxes
 - **Image preprocessing**: Optional grayscale + contrast boost for difficult text
 - **Overlay**: WPF borderless topmost window with canvas-drawn highlights
-- **DPI**: Fully handled — works at 100%, 125%, 150%, 200% scaling
-- **Settings**: JSON config in `%AppData%\ScreenFind\settings.json`
+- **DPI**: Fully handled per monitor — works at 100%, 125%, 150%, 200% scaling
+- **Settings**: JSON config in `%AppData%\ScreenFind\settings.json`, includes monitor exclusion
 
 ---
 
