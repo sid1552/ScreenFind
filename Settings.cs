@@ -8,6 +8,10 @@ namespace ScreenFind
     {
         public bool EnhanceOcr { get; set; } = false;
 
+        // Hotkey config — defaults to Ctrl+Shift (0x0006) + F (0x46)
+        public uint HotkeyModifiers { get; set; } = 0x0006;
+        public uint HotkeyKey { get; set; } = 0x46;
+
         private static readonly string SettingsDir =
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "ScreenFind");
 

@@ -1,7 +1,9 @@
 using System;
 using System.Runtime.InteropServices;
 using System.Windows;
+using System.Windows.Input;
 using System.Windows.Interop;
+using System.Windows.Media;
 using SysDrawing = System.Drawing;
 using SysForms = System.Windows.Forms;
 
@@ -12,14 +14,13 @@ namespace ScreenFind
         // ─── Win32 hotkey API ───────────────────────────────────────────
         private const int HOTKEY_ID = 9001;
         private const int WM_HOTKEY = 0x0312;
-
-        // Modifier keys
-        private const uint MOD_CTRL  = 0x0002;
-        private const uint MOD_SHIFT = 0x0004;
         private const uint MOD_NOREPEAT = 0x4000;
 
-        // Virtual key code for 'F'
-        private const uint VK_F = 0x46;
+        // Modifier flag values for FormatHotkey / Win32
+        private const uint MOD_ALT   = 0x0001;
+        private const uint MOD_CTRL  = 0x0002;
+        private const uint MOD_SHIFT = 0x0004;
+        private const uint MOD_WIN   = 0x0008;
 
         [DllImport("user32.dll")]
         private static extern bool RegisterHotKey(IntPtr hWnd, int id, uint fsModifiers, uint vk);
@@ -33,11 +34,21 @@ namespace ScreenFind
         private SysForms.NotifyIcon? _trayIcon;
         private Settings _settings = null!;
 
+        // Currently active hotkey (loaded from settings)
+        private uint _hotkeyModifiers;
+        private uint _hotkeyKey;
+
+        // Hotkey recording state
+        private bool _isRecording;
+
         public MainWindow()
         {
             InitializeComponent();
             _settings = Settings.Load();
+            _hotkeyModifiers = _settings.HotkeyModifiers;
+            _hotkeyKey = _settings.HotkeyKey;
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
+            HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
         }
@@ -101,15 +112,15 @@ namespace ScreenFind
             bool ok = RegisterHotKey(
                 helper.Handle,
                 HOTKEY_ID,
-                MOD_CTRL | MOD_SHIFT | MOD_NOREPEAT,
-                VK_F);
+                _hotkeyModifiers | MOD_NOREPEAT,
+                _hotkeyKey);
 
             if (!ok)
             {
                 MessageBox.Show(
-                    "Could not register Ctrl+Shift+F.\n\n" +
+                    $"Could not register {FormatHotkey(_hotkeyModifiers, _hotkeyKey)}.\n\n" +
                     "Another app may already be using this shortcut.\n" +
-                    "You can change the hotkey in MainWindow.xaml.cs.",
+                    "Click the hotkey display to choose a different one.",
                     "ScreenFind",
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
@@ -127,6 +138,103 @@ namespace ScreenFind
                 handled = true;
             }
             return IntPtr.Zero;
+        }
+
+        // ────────────────────────────────────────────────────────────────
+        //  Hotkey recording (click-to-change)
+        // ────────────────────────────────────────────────────────────────
+        private void HotkeyBorder_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
+        {
+            if (_isRecording) return;
+            _isRecording = true;
+            HotkeyText.Text = "Press a key combo...";
+            HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9E2AF"));
+            HotkeyHint.Text = "Esc to cancel";
+            PreviewKeyDown += HotkeyCapture_PreviewKeyDown;
+        }
+
+        private void HotkeyCapture_PreviewKeyDown(object sender, System.Windows.Input.KeyEventArgs e)
+        {
+            e.Handled = true;
+
+            // Escape cancels recording
+            if (e.Key == Key.Escape)
+            {
+                StopRecording();
+                return;
+            }
+
+            // Resolve system keys (e.g. Alt produces Key.System)
+            var key = (e.Key == Key.System) ? e.SystemKey : e.Key;
+
+            // Ignore lone modifier presses — wait for a real key
+            if (key == Key.LeftCtrl || key == Key.RightCtrl ||
+                key == Key.LeftShift || key == Key.RightShift ||
+                key == Key.LeftAlt || key == Key.RightAlt ||
+                key == Key.LWin || key == Key.RWin)
+                return;
+
+            // Build Win32 modifier flags from current keyboard state
+            uint mods = 0;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) mods |= MOD_CTRL;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))   mods |= MOD_SHIFT;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))     mods |= MOD_ALT;
+            if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) mods |= MOD_WIN;
+
+            // Require at least one modifier
+            if (mods == 0)
+            {
+                HotkeyText.Text = "Need a modifier (Ctrl/Alt/Shift)...";
+                return;
+            }
+
+            // Convert WPF Key to Win32 virtual key code
+            uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
+
+            // Try to register the new hotkey
+            var helper = new WindowInteropHelper(this);
+            UnregisterHotKey(helper.Handle, HOTKEY_ID);
+
+            bool ok = RegisterHotKey(helper.Handle, HOTKEY_ID, mods | MOD_NOREPEAT, vk);
+            if (ok)
+            {
+                // Success — save new hotkey
+                _hotkeyModifiers = mods;
+                _hotkeyKey = vk;
+                _settings.HotkeyModifiers = mods;
+                _settings.HotkeyKey = vk;
+                _settings.Save();
+                StopRecording();
+            }
+            else
+            {
+                // Failed — re-register the old hotkey
+                RegisterHotKey(helper.Handle, HOTKEY_ID, _hotkeyModifiers | MOD_NOREPEAT, _hotkeyKey);
+                HotkeyText.Text = $"{FormatHotkey(mods, vk)} is taken!";
+                HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F38BA8"));
+                // Let them try again (still recording)
+            }
+        }
+
+        private void StopRecording()
+        {
+            _isRecording = false;
+            PreviewKeyDown -= HotkeyCapture_PreviewKeyDown;
+            HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
+            HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5E0DC"));
+            HotkeyHint.Text = "click to change";
+        }
+
+        /// <summary>Builds a display string like "Ctrl + Shift + F" from Win32 modifier flags and VK code.</summary>
+        private static string FormatHotkey(uint modifiers, uint vk)
+        {
+            var parts = new System.Collections.Generic.List<string>();
+            if ((modifiers & MOD_CTRL)  != 0) parts.Add("Ctrl");
+            if ((modifiers & MOD_ALT)   != 0) parts.Add("Alt");
+            if ((modifiers & MOD_SHIFT) != 0) parts.Add("Shift");
+            if ((modifiers & MOD_WIN)   != 0) parts.Add("Win");
+            parts.Add(KeyInterop.KeyFromVirtualKey((int)vk).ToString());
+            return string.Join(" + ", parts);
         }
 
         // ────────────────────────────────────────────────────────────────
