@@ -128,7 +128,7 @@ namespace ScreenFind
 
             // Right-click context menu
             var menu = new SysForms.ContextMenuStrip();
-            menu.Items.Add("Show", null, (s, e) =>
+            menu.Items.Add("Options", null, (s, e) =>
             {
                 Show();
                 WindowState = WindowState.Normal;
