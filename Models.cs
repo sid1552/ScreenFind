@@ -27,5 +27,6 @@ namespace ScreenFind
     public class MatchResult
     {
         public Rect Bounds { get; set; } // in physical screen pixels
+        public bool IsFuzzy { get; set; } // true = fuzzy match (blue), false = exact match (yellow)
     }
 }

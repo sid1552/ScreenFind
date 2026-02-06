@@ -229,10 +229,15 @@ namespace ScreenFind
                 return;
             }
 
-            foreach (var line in _ocrLines)
+            // Track which (lineIndex, wordIndex) pairs are covered by exact matches
+            var exactMatchedWords = new HashSet<(int LineIdx, int WordIdx)>();
+
+            // ── Pass 1: Exact substring match (unchanged logic) ──
+            for (int lineIdx = 0; lineIdx < _ocrLines.Count; lineIdx++)
             {
+                var line = _ocrLines[lineIdx];
+
                 // Build a map: character offset → word index
-                // e.g. "Hello World" → chars 0-4 → word 0, chars 6-10 → word 1
                 var wordSpans = new List<(int Start, int End, int WordIdx)>();
                 int charPos = 0;
                 for (int i = 0; i < line.Words.Count; i++)
@@ -254,14 +259,18 @@ namespace ScreenFind
                     int matchEnd = idx + query.Length - 1;
 
                     // Which words overlap with chars [idx..matchEnd]?
-                    var hitWords = wordSpans
+                    var hitSpans = wordSpans
                         .Where(s => s.End >= idx && s.Start <= matchEnd)
-                        .Select(s => line.Words[s.WordIdx])
                         .ToList();
+
+                    var hitWords = hitSpans.Select(s => line.Words[s.WordIdx]).ToList();
 
                     if (hitWords.Count > 0)
                     {
-                        // Combine bounding boxes of all matched words
+                        // Mark these words as exact-matched
+                        foreach (var s in hitSpans)
+                            exactMatchedWords.Add((lineIdx, s.WordIdx));
+
                         double minX = hitWords.Min(w => w.Bounds.X);
                         double minY = hitWords.Min(w => w.Bounds.Y);
                         double maxX = hitWords.Max(w => w.Bounds.Right);
@@ -276,6 +285,11 @@ namespace ScreenFind
                     searchFrom = idx + 1;
                 }
             }
+
+            // ── Pass 2: Fuzzy word-level match (catches OCR misreads) ──
+            var fuzzyMatches = FuzzyMatcher.FindFuzzyMatches(
+                _ocrLines, query, exactMatchedWords);
+            _matches.AddRange(fuzzyMatches);
 
             // Draw all highlights
             DrawAllHighlights();
@@ -305,6 +319,12 @@ namespace ScreenFind
         private static readonly SolidColorBrush CurrentFill =
             new(Color.FromArgb(110, 255, 150, 0));
 
+        // Fuzzy match colors (blue-ish tint to distinguish from exact matches)
+        private static readonly SolidColorBrush FuzzyStroke =
+            new(Color.FromArgb(255, 80, 160, 255));
+        private static readonly SolidColorBrush FuzzyFill =
+            new(Color.FromArgb(55, 80, 160, 255));
+
         /// <summary>
         /// Draw yellow highlight rectangles for every match.
         /// </summary>
@@ -317,7 +337,10 @@ namespace ScreenFind
                 var padded = new Rect(
                     m.Bounds.X - 4, m.Bounds.Y - 4,
                     m.Bounds.Width + 8, m.Bounds.Height + 8);
-                var rect = MakeRect(padded, MatchStroke, 2, MatchFill, 5);
+                // Blue for fuzzy matches, yellow for exact matches
+                var stroke = m.IsFuzzy ? FuzzyStroke : MatchStroke;
+                var fill = m.IsFuzzy ? FuzzyFill : MatchFill;
+                var rect = MakeRect(padded, stroke, 2, fill, 5);
                 HighlightCanvas.Children.Add(rect);
             }
         }
