@@ -351,15 +351,16 @@ namespace ScreenFind
         {
             HighlightCanvas.Children.Clear();
 
-            foreach (var m in _matches)
+            for (int i = 0; i < _matches.Count; i++)
             {
+                var m = _matches[i];
                 var padded = new Rect(
                     m.Bounds.X - 4, m.Bounds.Y - 4,
                     m.Bounds.Width + 8, m.Bounds.Height + 8);
                 // Blue for fuzzy matches, yellow for exact matches
                 var stroke = m.IsFuzzy ? FuzzyStroke : MatchStroke;
                 var fill = m.IsFuzzy ? FuzzyFill : MatchFill;
-                var rect = MakeRect(padded, stroke, 2, fill, 5);
+                var rect = MakeRect(padded, stroke, 2, fill, 5, i);
                 HighlightCanvas.Children.Add(rect);
             }
         }
@@ -379,18 +380,20 @@ namespace ScreenFind
 
             var stroke = m.IsFuzzy ? CurrentFuzzyStroke : CurrentStroke;
             var fill = m.IsFuzzy ? CurrentFuzzyFill : CurrentFill;
-            var rect = MakeRect(inflated, stroke, 3, fill, 7);
+            var rect = MakeRect(inflated, stroke, 3, fill, 7, _currentIndex);
             HighlightCanvas.Children.Add(rect);
         }
 
         /// <summary>
         /// Helper: create a WPF Rectangle positioned on the canvas.
         /// Coordinates are converted from physical pixels → DIPs.
+        /// When matchIndex is provided, the rect becomes clickable (copies match text).
         /// </summary>
         private Rectangle MakeRect(
             Rect pixelBounds,
             SolidColorBrush stroke, double strokeThickness,
-            SolidColorBrush fill, double radius)
+            SolidColorBrush fill, double radius,
+            int? matchIndex = null)
         {
             var r = new Rectangle
             {
@@ -404,6 +407,18 @@ namespace ScreenFind
             };
             Canvas.SetLeft(r, pixelBounds.X / _scaleX);
             Canvas.SetTop(r,  pixelBounds.Y / _scaleY);
+
+            if (matchIndex.HasValue)
+            {
+                r.Cursor = Cursors.Hand;
+                int idx = matchIndex.Value;
+                r.MouseLeftButtonDown += (s, e) =>
+                {
+                    CopyMatchText(idx);
+                    e.Handled = true;
+                };
+            }
+
             return r;
         }
 
@@ -481,6 +496,31 @@ namespace ScreenFind
             DrawAllHighlights();
             DrawCurrentMatchHighlight();
             UpdateMatchInfoText();
+        }
+
+        private void CopyMatchText(int index)
+        {
+            if (index < 0 || index >= _matches.Count) return;
+
+            var text = _matches[index].Text;
+            if (string.IsNullOrEmpty(text)) return;
+
+            Clipboard.SetText(text);
+
+            // Brief "Copied!" feedback in the match info area
+            var savedText = MatchInfo.Text;
+            MatchInfo.Text = $"Copied: \"{text}\"";
+
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1.5)
+            };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                MatchInfo.Text = savedText;
+            };
+            timer.Start();
         }
 
         private void CopyCurrentMatchText()
