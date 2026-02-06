@@ -150,4 +150,4 @@ Hotkey pressed
 
 ## License
 
-Free to use, modify, and share. No attribution required.
+[MIT License](LICENSE) — free to use, modify, and share.
