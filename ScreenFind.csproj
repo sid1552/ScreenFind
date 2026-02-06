@@ -8,6 +8,7 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <RootNamespace>ScreenFind</RootNamespace>
     <AssemblyName>ScreenFind</AssemblyName>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
   </PropertyGroup>
 
 </Project>

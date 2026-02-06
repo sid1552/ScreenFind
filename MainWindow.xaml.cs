@@ -31,10 +31,13 @@ namespace ScreenFind
         private HwndSource? _hwndSource;
         private OverlayWindow? _currentOverlay;
         private SysForms.NotifyIcon? _trayIcon;
+        private Settings _settings = null!;
 
         public MainWindow()
         {
             InitializeComponent();
+            _settings = Settings.Load();
+            EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
         }
@@ -71,6 +74,12 @@ namespace ScreenFind
             });
             menu.Items.Add("Exit", null, (s, e) => Close());
             _trayIcon.ContextMenuStrip = menu;
+        }
+
+        private void EnhanceOcrCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            _settings.EnhanceOcr = EnhanceOcrCheckbox.IsChecked == true;
+            _settings.Save();
         }
 
         private void TrayButton_Click(object sender, RoutedEventArgs e)
@@ -138,7 +147,7 @@ namespace ScreenFind
                 var bitmap = CaptureScreen();
 
                 // Show the search overlay
-                _currentOverlay = new OverlayWindow(bitmap);
+                _currentOverlay = new OverlayWindow(bitmap, _settings.EnhanceOcr);
                 _currentOverlay.Closed += (s, e) => _currentOverlay = null;
                 _currentOverlay.Show();
             }

@@ -17,6 +17,7 @@ namespace ScreenFind
     {
         // ─── OCR data ──────────────────────────────────────────────────
         private readonly SysDrawing.Bitmap _capturedBitmap;
+        private readonly bool _enhanceOcr;
         private List<OcrLineInfo>? _ocrLines;
         private bool _ocrCompleted;
 
@@ -29,10 +30,11 @@ namespace ScreenFind
         private double _scaleY = 1.0;
 
         // ────────────────────────────────────────────────────────────────
-        public OverlayWindow(SysDrawing.Bitmap screenshot)
+        public OverlayWindow(SysDrawing.Bitmap screenshot, bool enhanceOcr = false)
         {
             InitializeComponent();
             _capturedBitmap = screenshot;
+            _enhanceOcr = enhanceOcr;
             Loaded += OverlayWindow_Loaded;
         }
 
@@ -109,9 +111,19 @@ namespace ScreenFind
             try
             {
                 // Save the capture to a temp file so the WinRT decoder can read it
+                // If enhance is on, preprocess a copy (original stays untouched for display)
                 var tempPath = System.IO.Path.Combine(
                     System.IO.Path.GetTempPath(), "screenfind_capture.bmp");
-                _capturedBitmap.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+
+                if (_enhanceOcr)
+                {
+                    using var enhanced = ImagePreprocessor.Enhance(_capturedBitmap);
+                    enhanced.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+                }
+                else
+                {
+                    _capturedBitmap.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+                }
 
                 try
                 {
