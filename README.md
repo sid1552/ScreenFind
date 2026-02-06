@@ -5,6 +5,8 @@ Press **Ctrl+Shift+F** anywhere → type your search → see matches highlighted
 
 Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, no dependencies.
 
+![ScreenFind Demo](demo.gif)
+
 ---
 
 ## How It Works
