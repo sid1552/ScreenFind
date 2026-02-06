@@ -12,9 +12,10 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 1. Press **Ctrl + Shift + F** from anywhere
 2. Your screen freezes (screenshot taken) and dims
 3. A Spotlight-style search bar appears
-4. Start typing — matches are highlighted in real time with yellow boxes
+4. Start typing — exact matches highlighted in **yellow**, fuzzy matches in **blue**
 5. Press **Enter** to jump to the next match, **Shift+Enter** for previous
-6. Press **Escape** to dismiss
+6. Press **Ctrl+C** to copy the current match text
+7. Press **Escape** to dismiss
 
 ---
 
@@ -54,7 +55,9 @@ ScreenFind/
 ├── MainWindow.xaml.cs
 ├── OverlayWindow.xaml
 ├── OverlayWindow.xaml.cs
-└── Models.cs
+├── Models.cs
+├── ImagePreprocessor.cs
+└── Settings.cs
 ```
 
 ### 3. Run It
@@ -68,7 +71,7 @@ dotnet run
 
 The first run takes ~30 seconds (compiling). After that it starts instantly.
 
-A small dark window will appear showing the hotkey. **Minimize it** — it keeps running in the background.
+A small dark window will appear showing the hotkey. You can **minimize to tray** — it keeps running in the background.
 
 ### 4. (Optional) Build a Standalone .exe
 
@@ -83,7 +86,7 @@ The exe will be in `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\Scree
 For a fully self-contained exe (no .NET install needed on target machine):
 
 ```
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true
+dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
 ```
 
 ---
@@ -97,6 +100,7 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 | Enter            | Jump to next match        |
 | Shift + Enter    | Jump to previous match    |
 | F3 / Shift+F3    | Next / previous match     |
+| Ctrl + C         | Copy current match text   |
 | Escape           | Close the overlay         |
 
 ---
@@ -168,16 +172,25 @@ Hotkey pressed
 
 - **Screen capture**: GDI+ `CopyFromScreen` — fast and reliable
 - **OCR**: `Windows.Media.Ocr.OcrEngine` — built into Windows, returns word-level bounding boxes
+- **Image preprocessing**: Optional grayscale + contrast boost for difficult text (via `ImagePreprocessor`)
 - **Overlay**: WPF borderless topmost window with canvas-drawn highlights
 - **DPI**: Fully handled — works at 100%, 125%, 150%, 200% scaling
+- **Settings**: JSON config in `%AppData%\ScreenFind\settings.json`
 
 ---
+
+## Features
+
+- **Real-time search** — matches highlighted as you type
+- **Fuzzy matching** — catches OCR misreads (e.g. "rn" → "m"), shown in blue
+- **System tray** — minimize to tray, runs silently in background
+- **Enhanced OCR mode** — optional image preprocessing for better detection of desktop icons and low-contrast text
+- **Copy match text** — Ctrl+C copies the currently selected match
+- **Settings persistence** — preferences saved to AppData
 
 ## Future Ideas
 
 - [ ] Multi-monitor support (capture all screens)
-- [ ] System tray icon (minimize to tray instead of taskbar)
-- [ ] Fuzzy matching (handle OCR misreads like "rn" → "m")
 - [ ] Click on a match to jump to / interact with that location
 - [ ] Configurable hotkey via settings file
 - [ ] Auto-start with Windows
