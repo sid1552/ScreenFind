@@ -1,12 +1,12 @@
 # ScreenFind — Ctrl+F for Your Entire Screen
 
-<a href="https://buymeacoffee.com/siddharthsqn"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
-<a href="https://github.com/sponsors/sid1552"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-ea4aaa?logo=githubsponsors&logoColor=white&style=for-the-badge" alt="GitHub Sponsors" height="50"></a>
-
 A lightweight Windows tool that lets you search for any text visible on your screen using OCR.
 Press a hotkey anywhere → type your search → see matches highlighted live on screen.
 
 Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, no dependencies.
+
+<a href="https://buymeacoffee.com/siddharthsqn"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
+<a href="https://github.com/sponsors/sid1552"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-ea4aaa?logo=githubsponsors&logoColor=white&style=for-the-badge" alt="GitHub Sponsors" height="50"></a>
 
 ![ScreenFind Demo](demo.gif)
 
