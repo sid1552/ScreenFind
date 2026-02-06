@@ -1,6 +1,6 @@
 # ScreenFind — Ctrl+F for Your Entire Screen
 
-[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow?logo=buymeacoffee)](https://buymeacoffee.com/siddharthsqn)
+[![Buy Me A Coffee](https://img.shields.io/badge/Buy%20Me%20A%20Coffee-donate-yellow?logo=buymeacoffee&style=for-the-badge)](https://buymeacoffee.com/siddharthsqn)
 
 A lightweight Windows tool that lets you search for any text visible on your screen using OCR.
 Press a hotkey anywhere → type your search → see matches highlighted live on screen.
