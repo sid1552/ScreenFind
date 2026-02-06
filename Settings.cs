@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Text.Json;
 
@@ -8,6 +9,10 @@ namespace ScreenFind
     {
         public bool EnhanceOcr { get; set; } = false;
         public bool DragToSelect { get; set; } = true;
+
+        // Monitor exclusion — stores DeviceNames of unchecked monitors
+        // Empty list = all monitors captured (new monitors auto-included)
+        public List<string> ExcludedMonitors { get; set; } = new();
 
         // Hotkey config — defaults to Ctrl+Shift (0x0006) + F (0x46)
         public uint HotkeyModifiers { get; set; } = 0x0006;
