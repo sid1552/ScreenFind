@@ -278,7 +278,8 @@ namespace ScreenFind
 
                         _matches.Add(new MatchResult
                         {
-                            Bounds = new Rect(minX, minY, maxX - minX, maxY - minY)
+                            Bounds = new Rect(minX, minY, maxX - minX, maxY - minY),
+                            Text = string.Join(" ", hitWords.Select(w => w.Text))
                         });
                     }
 
@@ -445,6 +446,16 @@ namespace ScreenFind
                         NavigateMatch(+1);
                     e.Handled = true;
                     break;
+
+                case Key.C:
+                    // Ctrl+C: copy current match text (only if nothing selected in search box)
+                    if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
+                        && SearchBox.SelectionLength == 0)
+                    {
+                        CopyCurrentMatchText();
+                        e.Handled = true;
+                    }
+                    break;
             }
         }
 
@@ -458,6 +469,32 @@ namespace ScreenFind
             DrawAllHighlights();
             DrawCurrentMatchHighlight();
             UpdateMatchInfoText();
+        }
+
+        private void CopyCurrentMatchText()
+        {
+            if (_currentIndex < 0 || _currentIndex >= _matches.Count) return;
+
+            var text = _matches[_currentIndex].Text;
+            if (string.IsNullOrEmpty(text)) return;
+
+            Clipboard.SetText(text);
+
+            // Brief "Copied!" feedback in the match info area
+            var savedText = MatchInfo.Text;
+            MatchInfo.Text = $"Copied: \"{text}\"";
+
+            // Restore after 1.5 seconds
+            var timer = new System.Windows.Threading.DispatcherTimer
+            {
+                Interval = TimeSpan.FromSeconds(1.5)
+            };
+            timer.Tick += (s, e) =>
+            {
+                timer.Stop();
+                MatchInfo.Text = savedText;
+            };
+            timer.Start();
         }
 
         // ════════════════════════════════════════════════════════════════

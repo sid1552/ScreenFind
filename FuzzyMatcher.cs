@@ -131,7 +131,8 @@ namespace ScreenFind
                         results.Add(new MatchResult
                         {
                             Bounds = new Rect(minX, minY, maxX - minX, maxY - minY),
-                            IsFuzzy = true
+                            IsFuzzy = true,
+                            Text = string.Join(" ", hitWords.Select(w => w.Text))
                         });
                     }
                 }

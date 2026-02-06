@@ -92,6 +92,8 @@
                 <Run Text=" next match" Foreground="#6C7086"/>
                 <Run Text="    Shift+Enter" />
                 <Run Text=" prev" Foreground="#6C7086"/>
+                <Run Text="    Ctrl+C" />
+                <Run Text=" copy" Foreground="#6C7086"/>
                 <Run Text="    Esc" />
                 <Run Text=" close" Foreground="#6C7086"/>
             </TextBlock>
