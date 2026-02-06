@@ -325,6 +325,12 @@ namespace ScreenFind
         private static readonly SolidColorBrush FuzzyFill =
             new(Color.FromArgb(55, 80, 160, 255));
 
+        // Current fuzzy match (brighter blue, like orange is to yellow)
+        private static readonly SolidColorBrush CurrentFuzzyStroke =
+            new(Color.FromArgb(255, 30, 120, 255));
+        private static readonly SolidColorBrush CurrentFuzzyFill =
+            new(Color.FromArgb(110, 30, 120, 255));
+
         /// <summary>
         /// Draw yellow highlight rectangles for every match.
         /// </summary>
@@ -358,7 +364,9 @@ namespace ScreenFind
                 m.Bounds.X - 6, m.Bounds.Y - 6,
                 m.Bounds.Width + 12, m.Bounds.Height + 12);
 
-            var rect = MakeRect(inflated, CurrentStroke, 3, CurrentFill, 7);
+            var stroke = m.IsFuzzy ? CurrentFuzzyStroke : CurrentStroke;
+            var fill = m.IsFuzzy ? CurrentFuzzyFill : CurrentFill;
+            var rect = MakeRect(inflated, stroke, 3, fill, 7);
             HighlightCanvas.Children.Add(rect);
         }
 
@@ -392,13 +400,20 @@ namespace ScreenFind
             {
                 MatchInfo.Text = _ocrCompleted ? "No matches" : "";
             }
-            else if (_currentIndex >= 0)
-            {
-                MatchInfo.Text = $"{_currentIndex + 1} / {_matches.Count}";
-            }
             else
             {
-                MatchInfo.Text = $"{_matches.Count} found";
+                int exact = _matches.Count(m => !m.IsFuzzy);
+                int fuzzy = _matches.Count(m => m.IsFuzzy);
+
+                // e.g. "1 / 4 (3 exact, 1 fuzzy)" or "1 / 3" if no fuzzy
+                string position = _currentIndex >= 0
+                    ? $"{_currentIndex + 1} / {_matches.Count}"
+                    : $"{_matches.Count} found";
+
+                if (fuzzy > 0)
+                    MatchInfo.Text = $"{position} ({exact} exact, {fuzzy} fuzzy)";
+                else
+                    MatchInfo.Text = position;
             }
         }
 
