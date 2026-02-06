@@ -36,6 +36,10 @@ namespace ScreenFind
         private Rectangle? _lassoRect;            // the visual drag rectangle
         private List<OcrWordInfo> _selectedWords = new();
 
+        // ─── "Copied!" feedback timer (single instance to prevent race conditions)
+        private System.Windows.Threading.DispatcherTimer? _feedbackTimer;
+        private string _savedMatchInfoText = "";
+
         // ────────────────────────────────────────────────────────────────
         public OverlayWindow(SysDrawing.Bitmap screenshot, bool enhanceOcr = false, bool dragToSelect = true)
         {
@@ -126,7 +130,7 @@ namespace ScreenFind
                 // Save the capture to a temp file so the WinRT decoder can read it
                 // If enhance is on, preprocess a copy (original stays untouched for display)
                 var tempPath = System.IO.Path.Combine(
-                    System.IO.Path.GetTempPath(), "screenfind_capture.bmp");
+                    System.IO.Path.GetTempPath(), $"screenfind_{Guid.NewGuid():N}.bmp");
 
                 if (_enhanceOcr)
                 {
@@ -323,10 +327,13 @@ namespace ScreenFind
                 }
             }
 
-            // ── Pass 2: Fuzzy word-level match (catches OCR misreads) ──
-            var fuzzyMatches = FuzzyMatcher.FindFuzzyMatches(
-                _ocrLines, query, exactMatchedWords);
-            _matches.AddRange(fuzzyMatches);
+            // ── Pass 2: Fuzzy word-level match (skip for very short queries) ──
+            if (query.Length >= 3)
+            {
+                var fuzzyMatches = FuzzyMatcher.FindFuzzyMatches(
+                    _ocrLines, query, exactMatchedWords);
+                _matches.AddRange(fuzzyMatches);
+            }
 
             // Draw all highlights
             DrawAllHighlights();
@@ -542,21 +549,7 @@ namespace ScreenFind
             if (string.IsNullOrEmpty(text)) return;
 
             TrySetClipboard(text);
-
-            // Brief "Copied!" feedback in the match info area
-            var savedText = MatchInfo.Text;
-            MatchInfo.Text = $"Copied: \"{text}\"";
-
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(1.5)
-            };
-            timer.Tick += (s, e) =>
-            {
-                timer.Stop();
-                MatchInfo.Text = savedText;
-            };
-            timer.Start();
+            ShowCopiedFeedback($"Copied: \"{text}\"");
         }
 
         private void CopyCurrentMatchText()
@@ -567,22 +560,33 @@ namespace ScreenFind
             if (string.IsNullOrEmpty(text)) return;
 
             TrySetClipboard(text);
+            ShowCopiedFeedback($"Copied: \"{text}\"");
+        }
 
-            // Brief "Copied!" feedback in the match info area
-            var savedText = MatchInfo.Text;
-            MatchInfo.Text = $"Copied: \"{text}\"";
+        /// <summary>
+        /// Show temporary feedback in the MatchInfo area. Uses a single timer
+        /// so rapid copies don't corrupt the text.
+        /// </summary>
+        private void ShowCopiedFeedback(string message)
+        {
+            // Stop any existing feedback timer and save the real text (only if not mid-feedback)
+            if (_feedbackTimer == null || !_feedbackTimer.IsEnabled)
+                _savedMatchInfoText = MatchInfo.Text;
+            else
+                _feedbackTimer.Stop();
 
-            // Restore after 1.5 seconds
-            var timer = new System.Windows.Threading.DispatcherTimer
+            MatchInfo.Text = message;
+
+            _feedbackTimer = new System.Windows.Threading.DispatcherTimer
             {
                 Interval = TimeSpan.FromSeconds(1.5)
             };
-            timer.Tick += (s, e) =>
+            _feedbackTimer.Tick += (s, e) =>
             {
-                timer.Stop();
-                MatchInfo.Text = savedText;
+                _feedbackTimer.Stop();
+                MatchInfo.Text = _savedMatchInfoText;
             };
-            timer.Start();
+            _feedbackTimer.Start();
         }
 
         // ════════════════════════════════════════════════════════════════
@@ -770,27 +774,13 @@ namespace ScreenFind
         }
 
         /// <summary>
-        /// Show "Copied!" feedback in the match info area for drag-selected text.
+        /// Show "Copied!" feedback for drag-selected text.
         /// </summary>
         private void ShowSelectionCopiedFeedback(string text)
         {
             var truncated = text.Length > 60 ? text.Substring(0, 60) + "..." : text;
-            // Replace newlines with spaces for display
             truncated = truncated.Replace("\n", " ").Replace("\r", "");
-
-            var savedText = MatchInfo.Text;
-            MatchInfo.Text = $"Copied: \"{truncated}\"";
-
-            var timer = new System.Windows.Threading.DispatcherTimer
-            {
-                Interval = TimeSpan.FromSeconds(1.5)
-            };
-            timer.Tick += (s, e) =>
-            {
-                timer.Stop();
-                MatchInfo.Text = savedText;
-            };
-            timer.Start();
+            ShowCopiedFeedback($"Copied: \"{truncated}\"");
         }
 
         // ════════════════════════════════════════════════════════════════

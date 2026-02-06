@@ -97,6 +97,7 @@ namespace ScreenFind
 
         private void EnhanceOcrCheckbox_Changed(object sender, RoutedEventArgs e)
         {
+            if (_settings == null) return; // fired during InitializeComponent before settings loaded
             _settings.EnhanceOcr = EnhanceOcrCheckbox.IsChecked == true;
             _settings.Save();
         }

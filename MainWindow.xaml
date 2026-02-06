@@ -17,11 +17,12 @@
                        HorizontalAlignment="Center" Margin="0,4,0,20"/>
             
             <StackPanel HorizontalAlignment="Center">
-                <Border x:Name="HotkeyBorder" Background="#313244" CornerRadius="8"
+                <Border x:Name="HotkeyBorder" CornerRadius="8"
                         Padding="16,10" HorizontalAlignment="Center"
                         Cursor="Hand" MouseLeftButtonDown="HotkeyBorder_Click">
                     <Border.Style>
                         <Style TargetType="Border">
+                            <Setter Property="Background" Value="#313244"/>
                             <Style.Triggers>
                                 <Trigger Property="IsMouseOver" Value="True">
                                     <Setter Property="Background" Value="#3B3B50"/>
