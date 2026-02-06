@@ -181,7 +181,7 @@
 
                 <!-- Enhance OCR checkbox -->
                 <CheckBox x:Name="EnhanceOcrCheckbox"
-                          Content="Enhance OCR (helps with desktop icons &amp; low-contrast text)"
+                          Content="Enhance OCR (helps with desktop icons &amp; low-contrast text, slower)"
                           FontSize="12" Foreground="#A6ADC8"
                           HorizontalAlignment="Center" Margin="0,14,0,0"
                           Checked="EnhanceOcrCheckbox_Changed"

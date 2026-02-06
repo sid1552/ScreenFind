@@ -174,10 +174,15 @@ namespace ScreenFind
                 var tempPath = System.IO.Path.Combine(
                     System.IO.Path.GetTempPath(), $"screenfind_{Guid.NewGuid():N}.bmp");
 
+                // Preprocessing may upscale the image — need to scale OCR bounds back down
+                double preprocessScale = 1.0;
+
                 if (_enhanceOcr)
                 {
-                    using var enhanced = ImagePreprocessor.Enhance(_capturedBitmap);
+                    var (enhanced, scaleFactor) = ImagePreprocessor.Enhance(_capturedBitmap);
+                    preprocessScale = scaleFactor;
                     enhanced.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+                    enhanced.Dispose();
                 }
                 else
                 {
@@ -231,14 +236,17 @@ namespace ScreenFind
                     {
                         var lineInfo = new OcrLineInfo
                         {
+                            // Divide bounds by preprocessScale to map back to original
+                            // screen pixels (upscaling makes the image larger, so OCR
+                            // returns larger coords that we need to shrink back down)
                             Words = line.Words.Select(w => new OcrWordInfo
                             {
                                 Text = w.Text,
                                 Bounds = new Rect(
-                                    w.BoundingRect.X,
-                                    w.BoundingRect.Y,
-                                    w.BoundingRect.Width,
-                                    w.BoundingRect.Height)
+                                    w.BoundingRect.X / preprocessScale,
+                                    w.BoundingRect.Y / preprocessScale,
+                                    w.BoundingRect.Width / preprocessScale,
+                                    w.BoundingRect.Height / preprocessScale)
                             }).ToList()
                         };
                         lineInfo.FullText = string.Join(" ", lineInfo.Words.Select(w => w.Text));
