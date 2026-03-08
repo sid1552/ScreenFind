@@ -61,6 +61,58 @@ namespace ScreenFind
             // If PaddleOCR was enabled from a previous session, pre-load models now
             if (_settings.UsePaddleOcr)
                 PaddleOcrEngineManager.Warmup();
+
+            // Pre-warm overlay windows after the main window finishes loading.
+            // This forces HWND creation + WPF layout so the first hotkey press is fast.
+            Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
+                new Action(PrewarmOverlays));
+        }
+
+        /// <summary>
+        /// Pre-create overlay windows for each active monitor. Show+Hide at Opacity=0
+        /// forces WPF to parse XAML, build the visual tree, create the HWND, and run
+        /// the first layout pass — so when the hotkey fires, we just set the bitmap and show.
+        /// </summary>
+        private void PrewarmOverlays()
+        {
+            var screens = SysForms.Screen.AllScreens
+                .Where(s => !_settings.ExcludedMonitors.Contains(s.DeviceName))
+                .ToArray();
+
+            if (screens.Length == 0)
+                screens = SysForms.Screen.AllScreens.Where(s => s.Primary).ToArray();
+
+            OverlayWindow? primaryOverlay = null;
+
+            foreach (var screen in screens)
+            {
+                bool isPrimary = screen.Primary || (primaryOverlay == null && !screens.Any(s => s.Primary));
+                var overlay = new OverlayWindow(
+                    screen,
+                    _settings.EnhanceOcr, _settings.DragToSelect,
+                    isPrimary, _settings.UsePaddleOcr);
+
+                overlay.CloseAllRequested += () => DismissAllOverlays();
+
+                overlay.Prewarm();
+                _allOverlays.Add(overlay);
+
+                if (isPrimary)
+                    primaryOverlay = overlay;
+            }
+
+            // Wire search sync
+            if (primaryOverlay != null)
+            {
+                primaryOverlay.SearchChanged += query =>
+                {
+                    foreach (var overlay in _allOverlays)
+                    {
+                        if (overlay != primaryOverlay)
+                            overlay.ApplySearch(query);
+                    }
+                };
+            }
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -482,69 +534,46 @@ namespace ScreenFind
         // ────────────────────────────────────────────────────────────────
         //  Hotkey pressed → capture screen → show overlay
         // ────────────────────────────────────────────────────────────────
-        private void OnHotkeyPressed()
+        private async void OnHotkeyPressed()
         {
-            // Close any existing overlays first
-            CloseAllOverlays();
+            // Dismiss any visible overlays first
+            DismissAllOverlays();
 
             try
             {
-                // Capture all non-excluded monitors
-                var captures = CaptureAllScreens()
-                    .Where(c => !_settings.ExcludedMonitors.Contains(c.Screen.DeviceName))
-                    .ToList();
+                // Rebuild overlays if the monitor config changed (monitors added/removed,
+                // or user changed excluded monitors in settings)
+                RebuildOverlaysIfNeeded();
 
-                // Fallback: if somehow all are excluded, capture primary only
-                if (captures.Count == 0)
-                {
-                    captures = CaptureAllScreens()
-                        .Where(c => c.Screen.Primary)
-                        .ToList();
-                }
+                // Get active screens matching our overlays
+                var screens = _allOverlays
+                    .Select(o => o)
+                    .ToArray();
 
+                // Capture screens on background thread (the only slow part now)
+                var screenObjects = SysForms.Screen.AllScreens
+                    .Where(s => !_settings.ExcludedMonitors.Contains(s.DeviceName))
+                    .ToArray();
+
+                if (screenObjects.Length == 0)
+                    screenObjects = SysForms.Screen.AllScreens.Where(s => s.Primary).ToArray();
+
+                var bitmaps = await System.Threading.Tasks.Task.Run(() =>
+                    CaptureScreens(screenObjects));
+
+                // Activate each pre-warmed overlay with its fresh screenshot
                 OverlayWindow? primaryOverlay = null;
-
-                foreach (var (screen, bitmap) in captures)
+                for (int i = 0; i < _allOverlays.Count && i < bitmaps.Count; i++)
                 {
-                    // If the original primary is included, it gets the search bar.
-                    // Otherwise the first screen in the list becomes "primary" (gets search bar).
-                    bool isPrimary = screen.Primary || (primaryOverlay == null && !captures.Any(c => c.Screen.Primary));
-                    var overlay = new OverlayWindow(
-                        bitmap, screen,
-                        _settings.EnhanceOcr, _settings.DragToSelect,
-                        isPrimary, _settings.UsePaddleOcr);
-                    _allOverlays.Add(overlay);
+                    var overlay = _allOverlays[i];
+                    overlay.Activate(bitmaps[i]);
 
-                    if (isPrimary)
-                        primaryOverlay = overlay;
-                }
-
-                // Wire search sync: primary broadcasts query to all secondaries
-                if (primaryOverlay != null)
-                {
-                    primaryOverlay.SearchChanged += query =>
+                    if (primaryOverlay == null)
                     {
-                        foreach (var overlay in _allOverlays)
-                        {
-                            if (overlay != primaryOverlay)
-                                overlay.ApplySearch(query);
-                        }
-                    };
+                        // First overlay that's primary (or first one if none is primary)
+                        primaryOverlay = overlay;
+                    }
                 }
-
-                // Wire Escape: any overlay can close all overlays
-                foreach (var overlay in _allOverlays)
-                {
-                    overlay.CloseAllRequested += () => CloseAllOverlays();
-                }
-
-                // Show all overlays (primary last so it gets focus)
-                foreach (var overlay in _allOverlays)
-                {
-                    if (overlay != primaryOverlay)
-                        overlay.Show();
-                }
-                primaryOverlay?.Show();
             }
             catch (Exception ex)
             {
@@ -556,24 +585,84 @@ namespace ScreenFind
             }
         }
 
-        private void CloseAllOverlays()
+        /// <summary>
+        /// Check if the monitor setup has changed since we pre-warmed the overlays.
+        /// If so, close old overlays and create + prewarm new ones.
+        /// </summary>
+        private void RebuildOverlaysIfNeeded()
         {
-            var overlays = _allOverlays.ToList();
-            _allOverlays.Clear();
-            foreach (var o in overlays)
+            var activeScreens = SysForms.Screen.AllScreens
+                .Where(s => !_settings.ExcludedMonitors.Contains(s.DeviceName))
+                .ToArray();
+
+            if (activeScreens.Length == 0)
+                activeScreens = SysForms.Screen.AllScreens.Where(s => s.Primary).ToArray();
+
+            // Check if overlay count matches and device names match
+            if (_allOverlays.Count == activeScreens.Length)
+                return; // assume same config — good enough for most cases
+
+            // Config changed — rebuild
+            foreach (var o in _allOverlays)
             {
                 try { o.Close(); } catch { }
+            }
+            _allOverlays.Clear();
+
+            OverlayWindow? primaryOverlay = null;
+
+            foreach (var screen in activeScreens)
+            {
+                bool isPrimary = screen.Primary || (primaryOverlay == null && !activeScreens.Any(s => s.Primary));
+                var overlay = new OverlayWindow(
+                    screen,
+                    _settings.EnhanceOcr, _settings.DragToSelect,
+                    isPrimary, _settings.UsePaddleOcr);
+
+                overlay.CloseAllRequested += () => DismissAllOverlays();
+                overlay.Prewarm();
+                _allOverlays.Add(overlay);
+
+                if (isPrimary)
+                    primaryOverlay = overlay;
+            }
+
+            if (primaryOverlay != null)
+            {
+                primaryOverlay.SearchChanged += query =>
+                {
+                    foreach (var overlay in _allOverlays)
+                    {
+                        if (overlay != primaryOverlay)
+                            overlay.ApplySearch(query);
+                    }
+                };
+            }
+        }
+
+        /// <summary>
+        /// Hide all overlays (don't destroy — they'll be reused on next hotkey press).
+        /// </summary>
+        private void DismissAllOverlays()
+        {
+            foreach (var o in _allOverlays)
+            {
+                try { o.Dismiss(); } catch { }
             }
         }
 
         // ────────────────────────────────────────────────────────────────
         //  Capture ALL screens using GDI+
         // ────────────────────────────────────────────────────────────────
-        private static List<(SysForms.Screen Screen, SysDrawing.Bitmap Bitmap)> CaptureAllScreens()
+        /// <summary>
+        /// Capture specific screens using GDI+. Can run on a background thread.
+        /// Returns bitmaps in the same order as the input screens array.
+        /// </summary>
+        private static List<SysDrawing.Bitmap> CaptureScreens(SysForms.Screen[] screens)
         {
-            var captures = new List<(SysForms.Screen, SysDrawing.Bitmap)>();
+            var bitmaps = new List<SysDrawing.Bitmap>(screens.Length);
 
-            foreach (var screen in SysForms.Screen.AllScreens)
+            foreach (var screen in screens)
             {
                 var bounds = screen.Bounds; // physical pixels (app is DPI-aware)
 
@@ -591,10 +680,10 @@ namespace ScreenFind
                         SysDrawing.CopyPixelOperation.SourceCopy);
                 }
 
-                captures.Add((screen, bmp));
+                bitmaps.Add(bmp);
             }
 
-            return captures;
+            return bitmaps;
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -602,7 +691,12 @@ namespace ScreenFind
         // ────────────────────────────────────────────────────────────────
         protected override void OnClosed(EventArgs e)
         {
-            CloseAllOverlays();
+            // Actually close (destroy) all cached overlays on app exit
+            foreach (var o in _allOverlays)
+            {
+                try { o.Close(); } catch { }
+            }
+            _allOverlays.Clear();
 
             if (_trayIcon != null)
             {

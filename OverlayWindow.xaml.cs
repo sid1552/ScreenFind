@@ -27,7 +27,7 @@ namespace ScreenFind
         private static extern uint GetDpiForWindow(IntPtr hwnd);
 
         // ─── OCR data ──────────────────────────────────────────────────
-        private readonly SysDrawing.Bitmap _capturedBitmap;
+        private SysDrawing.Bitmap _capturedBitmap;
         private readonly bool _enhanceOcr;
         private readonly bool _dragToSelect;
         private readonly bool _usePaddleOcr;
@@ -65,71 +65,151 @@ namespace ScreenFind
         private string _savedMatchInfoText = "";
 
         // ────────────────────────────────────────────────────────────────
-        public OverlayWindow(SysDrawing.Bitmap screenshot, SysForms.Screen targetScreen,
+        public OverlayWindow(SysForms.Screen targetScreen,
             bool enhanceOcr = false, bool dragToSelect = true, bool isPrimary = true,
             bool usePaddleOcr = false)
         {
             InitializeComponent();
-            _capturedBitmap = screenshot;
             _targetScreen = targetScreen;
             _enhanceOcr = enhanceOcr;
             _dragToSelect = dragToSelect;
             _isPrimary = isPrimary;
             _usePaddleOcr = usePaddleOcr;
-            Opacity = 0; // hidden until positioned on correct monitor
-            Loaded += OverlayWindow_Loaded;
+            Opacity = 0; // hidden until Activate()
+
+            // Wire mouse events once (survive across Activate/Dismiss cycles)
+            SelectionCanvas.MouseLeftButtonDown += SelectionCanvas_MouseLeftButtonDown;
+            SelectionCanvas.MouseMove += SelectionCanvas_MouseMove;
+            SelectionCanvas.MouseLeftButtonUp += SelectionCanvas_MouseLeftButtonUp;
+
+            // Secondary monitors: hide search bar permanently
+            if (!_isPrimary)
+            {
+                SearchBarBorder.Visibility = Visibility.Collapsed;
+                LoadingBadge.Visibility = Visibility.Collapsed;
+            }
         }
 
         // ════════════════════════════════════════════════════════════════
-        //  INITIALIZATION
+        //  PRE-WARMING — forces HWND creation + full WPF layout at startup
+        //  so the first hotkey press is near-instant.
         // ════════════════════════════════════════════════════════════════
 
         /// <summary>
+        /// Pre-create the native window (HWND) and run the first WPF layout pass.
+        /// The overlay stays invisible (Opacity=0). Call once at startup.
+        /// </summary>
+        public void Prewarm()
+        {
+            // Show() creates the HWND and triggers layout, but Opacity=0 so nothing visible.
+            // Then immediately Hide() so it's not in the way.
+            Show();
+            Hide();
+        }
+
+        // ════════════════════════════════════════════════════════════════
+        //  ACTIVATE / DISMISS — reuse the pre-warmed window each time
+        // ════════════════════════════════════════════════════════════════
+
+        /// <summary>
+        /// Set new screenshot, reset all state, show the overlay, and start OCR.
+        /// Called each time the hotkey fires.
+        /// </summary>
+        public async void Activate(SysDrawing.Bitmap screenshot)
+        {
+            // Dispose previous screenshot
+            _capturedBitmap?.Dispose();
+            _capturedBitmap = screenshot;
+
+            // Reset all search/highlight/selection state
+            ResetState();
+
+            // Reposition on the target monitor and update DPI
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var bounds = _targetScreen.Bounds;
+            MoveWindow(hwnd, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
+            uint dpi = GetDpiForWindow(hwnd);
+            _scaleX = dpi / 96.0;
+            _scaleY = dpi / 96.0;
+
+            // Show the captured screenshot as background
+            SetScreenshotBackground();
+
+            // Make visible and show
+            Opacity = 1;
+            Show();
+
+            if (_isPrimary)
+                SearchBox.Focus();
+
+            // Run OCR in the background
+            await RunOcrAsync();
+        }
+
+        /// <summary>
+        /// Hide the overlay without destroying it. The window stays in memory
+        /// so the next Activate() is near-instant (no HWND/layout overhead).
+        /// </summary>
+        public void Dismiss()
+        {
+            Opacity = 0;
+            Hide();
+        }
+
+        /// <summary>
+        /// Clear all state so the overlay is fresh for the next Activate() call.
+        /// </summary>
+        private void ResetState()
+        {
+            // Search state
+            SearchBox.Text = "";
+            _ocrLines = null;
+            _ocrCompleted = false;
+            _matches.Clear();
+            _currentIndex = -1;
+            _pendingQuery = "";
+            MatchInfo.Text = "";
+
+            // Highlights
+            HighlightCanvas.Children.Clear();
+
+            // Selection state
+            _isDragging = false;
+            _selectedWords.Clear();
+            foreach (var r in _selectionHighlights)
+                r.Visibility = Visibility.Collapsed;
+            _lassoRect = null;
+            SelectionCanvas.IsHitTestVisible = false;
+            SelectionCanvas.Cursor = Cursors.Arrow;
+
+            // Loading badge
+            if (_isPrimary)
+                LoadingBadge.Visibility = Visibility.Visible;
+
+            // Feedback timer
+            _feedbackTimer?.Stop();
+            _savedMatchInfoText = "";
+        }
+
+        /// <summary>
         /// Fires after HWND is created but BEFORE first render — positions the window
-        /// on the correct monitor so there's no visible scaling flash.
+        /// on the correct monitor. Only runs once (during Prewarm or first Show).
         /// </summary>
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
 
-            // Position window on target monitor BEFORE first render
+            // Position window on target monitor
             var hwnd = new WindowInteropHelper(this).Handle;
             var bounds = _targetScreen.Bounds;
             MoveWindow(hwnd, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
 
-            // Get DPI directly from Win32 — reliable immediately after MoveWindow
-            // (PresentationSource may still report the old monitor's DPI at this point)
+            // Get DPI
             uint dpi = GetDpiForWindow(hwnd);
             _scaleX = dpi / 96.0;
             _scaleY = dpi / 96.0;
 
-            Opacity = 1;
-        }
-
-        private async void OverlayWindow_Loaded(object sender, RoutedEventArgs e)
-        {
-            // 1. Show the captured screenshot as background
-            SetScreenshotBackground();
-
-            // 4. Wire up selection canvas mouse events (drag-to-select works on ALL monitors)
-            SelectionCanvas.MouseLeftButtonDown += SelectionCanvas_MouseLeftButtonDown;
-            SelectionCanvas.MouseMove += SelectionCanvas_MouseMove;
-            SelectionCanvas.MouseLeftButtonUp += SelectionCanvas_MouseLeftButtonUp;
-
-            if (_isPrimary)
-            {
-                // 5. Focus the search box immediately (primary only)
-                SearchBox.Focus();
-            }
-            else
-            {
-                // Secondary monitors: hide search bar and loading badge
-                SearchBarBorder.Visibility = Visibility.Collapsed;
-                LoadingBadge.Visibility = Visibility.Collapsed;
-            }
-
-            // 6. Run OCR in the background (each monitor runs its own OCR)
-            await RunOcrAsync();
+            // Don't set Opacity=1 here — Activate() controls visibility
         }
 
         /// <summary>
@@ -700,7 +780,7 @@ namespace ScreenFind
             switch (e.Key)
             {
                 case Key.Escape:
-                    // Tell MainWindow to close ALL overlays (all monitors)
+                    // Tell MainWindow to dismiss ALL overlays (hide, not close)
                     CloseAllRequested?.Invoke();
                     e.Handled = true;
                     break;
