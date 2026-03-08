@@ -47,6 +47,12 @@ namespace ScreenFind
         public MainWindow()
         {
             InitializeComponent();
+
+            // Set window icon from app.ico (loaded from disk so it works in single-file publish)
+            var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (System.IO.File.Exists(icoPath))
+                Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(icoPath));
+
             _settings = Settings.Load();
             _hotkeyModifiers = _settings.HotkeyModifiers;
             _hotkeyKey = _settings.HotkeyKey;
