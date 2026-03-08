@@ -58,6 +58,7 @@ namespace ScreenFind
         private Point _dragStartDip;              // mouse-down position in WPF DIPs
         private Rectangle? _lassoRect;            // the visual drag rectangle
         private List<OcrWordInfo> _selectedWords = new();
+        private List<Rectangle> _selectionHighlights = new();  // reusable highlight pool
 
         // ─── "Copied!" feedback timer (single instance to prevent race conditions)
         private System.Windows.Threading.DispatcherTimer? _feedbackTimer;
@@ -888,8 +889,10 @@ namespace ScreenFind
             {
                 // Sort words in reading order and build text
                 var text = BuildSelectedText(_selectedWords);
-                TrySetClipboard(text);
                 ShowSelectionCopiedFeedback(text);
+
+                // Copy to clipboard on a background STA thread — zero UI blocking
+                CopyToClipboardBackground(text);
             }
 
             // Re-focus the search box so keyboard shortcuts keep working
@@ -902,16 +905,12 @@ namespace ScreenFind
         /// </summary>
         private void UpdateSelectionHighlights(Rect physicalLassoRect)
         {
-            // Remove everything except the lasso rect
-            var toRemove = SelectionCanvas.Children.Cast<UIElement>()
-                .Where(c => c != _lassoRect).ToList();
-            foreach (var child in toRemove)
-                SelectionCanvas.Children.Remove(child);
-
             _selectedWords.Clear();
 
             if (_ocrLines == null) return;
 
+            // Collect matching words
+            int matchIndex = 0;
             foreach (var line in _ocrLines)
             {
                 foreach (var word in line.Words)
@@ -920,24 +919,41 @@ namespace ScreenFind
                     {
                         _selectedWords.Add(word);
 
-                        // Draw green highlight (coords in physical pixels → convert to DIPs)
-                        var r = new Rectangle
+                        // Reuse existing rectangle or create a new one
+                        Rectangle r;
+                        if (matchIndex < _selectionHighlights.Count)
                         {
-                            Stroke = SelectionStroke,
-                            StrokeThickness = 1.5,
-                            Fill = SelectionFill,
-                            Width = word.Bounds.Width / _scaleX + 4,
-                            Height = word.Bounds.Height / _scaleY + 4,
-                            RadiusX = 3,
-                            RadiusY = 3,
-                            IsHitTestVisible = false
-                        };
+                            r = _selectionHighlights[matchIndex];
+                            r.Visibility = Visibility.Visible;
+                        }
+                        else
+                        {
+                            r = new Rectangle
+                            {
+                                Stroke = SelectionStroke,
+                                StrokeThickness = 1.5,
+                                Fill = SelectionFill,
+                                RadiusX = 3,
+                                RadiusY = 3,
+                                IsHitTestVisible = false
+                            };
+                            _selectionHighlights.Add(r);
+                            SelectionCanvas.Children.Add(r);
+                        }
+
+                        r.Width = word.Bounds.Width / _scaleX + 4;
+                        r.Height = word.Bounds.Height / _scaleY + 4;
                         Canvas.SetLeft(r, word.Bounds.X / _scaleX - 2);
                         Canvas.SetTop(r, word.Bounds.Y / _scaleY - 2);
-                        SelectionCanvas.Children.Add(r);
+
+                        matchIndex++;
                     }
                 }
             }
+
+            // Hide unused rectangles from the pool (instead of removing them)
+            for (int i = matchIndex; i < _selectionHighlights.Count; i++)
+                _selectionHighlights[i].Visibility = Visibility.Collapsed;
         }
 
         /// <summary>
@@ -1008,6 +1024,34 @@ namespace ScreenFind
                     System.Threading.Thread.Sleep(50);
                 }
             }
+        }
+
+        /// <summary>
+        /// Fully non-blocking clipboard copy — runs all attempts on a background thread
+        /// using Win32 directly, so the UI thread never blocks.
+        /// </summary>
+        private void CopyToClipboardBackground(string text)
+        {
+            // Clipboard.SetText must run on an STA thread. Spin up a short-lived
+            // STA thread so the UI thread is completely free.
+            var thread = new System.Threading.Thread(() =>
+            {
+                for (int i = 0; i < 5; i++)
+                {
+                    try
+                    {
+                        Clipboard.SetText(text);
+                        return;
+                    }
+                    catch (System.Runtime.InteropServices.COMException)
+                    {
+                        System.Threading.Thread.Sleep(50);
+                    }
+                }
+            });
+            thread.SetApartmentState(System.Threading.ApartmentState.STA);
+            thread.IsBackground = true;
+            thread.Start();
         }
 
         // ════════════════════════════════════════════════════════════════
