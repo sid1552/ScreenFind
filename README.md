@@ -23,7 +23,7 @@ Standalone exe — just download and double-click. No installation or .NET runti
 
 ![VirusTotal Results](virustotal.png)
 
-[View full report on VirusTotal](https://www.virustotal.com/gui/file/7f7f1d2d3940e49fdc334e93e490816ffd73da9f162e904d344f3eb9c1d218a5/detection)
+[View full report on VirusTotal](https://www.virustotal.com/gui/file/102811242c2d3aa7306e210c40fc88e3907199a3a157c811724477a292f7b7de/detection)
 
 **2/70 flags are false positives.** Here's why:
 
