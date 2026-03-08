@@ -176,8 +176,8 @@ namespace ScreenFind
             // Selection state
             _isDragging = false;
             _selectedWords.Clear();
-            foreach (var r in _selectionHighlights)
-                r.Visibility = Visibility.Collapsed;
+            SelectionCanvas.Children.Clear();
+            _selectionHighlights.Clear();
             _lassoRect = null;
             SelectionCanvas.IsHitTestVisible = false;
             SelectionCanvas.Cursor = Cursors.Arrow;
@@ -906,6 +906,7 @@ namespace ScreenFind
             _dragStartDip = clickPosDip;
             _selectedWords.Clear();
             SelectionCanvas.Children.Clear();
+            _selectionHighlights.Clear(); // pool was removed from canvas, reset it
 
             // Create the dashed lasso rectangle
             _lassoRect = new Rectangle
