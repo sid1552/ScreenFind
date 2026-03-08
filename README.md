@@ -19,23 +19,13 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 Standalone exe — just download and double-click. No installation or .NET runtime needed.
 
 <details>
-<summary>VirusTotal scan results — 68/70 clean (click to expand)</summary>
+<summary>VirusTotal scan results — 0/67 clean (click to expand)</summary>
 
 ![VirusTotal Results](virustotal.png)
 
 [View full report on VirusTotal](https://www.virustotal.com/gui/file/102811242c2d3aa7306e210c40fc88e3907199a3a157c811724477a292f7b7de/detection)
 
-**2/70 flags are false positives.** Here's why:
-
-- **Bkav Pro** (`W64.AIDetectMalware`) — generic AI-based heuristic, not a specific malware signature. Bkav Pro is known for high false positive rates on unsigned executables.
-- **Gridinsoft** (`Trojan.Win64.Agent.oa!s1`) — another generic heuristic label, not a real detection.
-
-**Why these flags happen:**
-- ScreenFind is built as a **.NET single-file executable** — it bundles and extracts native DLLs at runtime, which heuristic scanners can mistake for suspicious self-extracting behavior.
-- The exe is **unsigned** (no code signing certificate), which makes AI-based scanners more aggressive.
-- The app uses **Win32 APIs** (global hotkeys, screen capture, clipboard access) that are legitimate for its functionality but overlap with patterns heuristic engines flag generically.
-
-Every major antivirus engine — **Windows Defender, Kaspersky, Norton, Malwarebytes, ESET, Avast, AVG, Bitdefender** — passes it clean. The source code is fully open and auditable in this repo.
+**0/67 — no security vendors flagged this file as malicious.** The source code is fully open and auditable in this repo.
 
 </details>
 
