@@ -115,10 +115,19 @@ namespace ScreenFind
         // ────────────────────────────────────────────────────────────────
         private void SetupTrayIcon()
         {
+            // Load custom icon from the embedded resource (app.ico in project root).
+            // Falls back to the generic Windows app icon if the file isn't found.
+            SysDrawing.Icon trayIcon;
+            var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
+            if (System.IO.File.Exists(icoPath))
+                trayIcon = new SysDrawing.Icon(icoPath);
+            else
+                trayIcon = SysDrawing.SystemIcons.Application;
+
             _trayIcon = new SysForms.NotifyIcon
             {
                 Text = "ScreenFind",
-                Icon = SysDrawing.SystemIcons.Application,
+                Icon = trayIcon,
                 Visible = false
             };
 

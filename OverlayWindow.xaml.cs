@@ -232,7 +232,6 @@ namespace ScreenFind
                 {
                     LoadingBadge.Visibility = Visibility.Collapsed;
                     MatchInfo.Text = $"OCR error: {ex.Message}";
-                    System.Diagnostics.Debug.WriteLine($"OCR error: {ex}");
                 });
             }
         }
