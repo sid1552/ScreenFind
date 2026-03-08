@@ -149,11 +149,14 @@ For building from source: **.NET 8 SDK**
 ## Architecture
 
 ```
+App startup
+    └── Pre-warm overlay windows (HWND + layout cached, invisible)
+
 Hotkey pressed
     │
-    ├── Each monitor captured (GDI+ BitBlt)
+    ├── Each monitor captured (GDI+ BitBlt, background thread)
     │
-    ├── One overlay window per monitor shown instantly
+    ├── Pre-warmed overlays activated instantly (~100-200ms total)
     │       ├── Frozen screenshot (dimmed)
     │       ├── Search bar (primary monitor only)
     │       ├── Selection canvas (drag-to-select)
@@ -164,7 +167,8 @@ Hotkey pressed
             └── Results ready → search + highlight as you type
 ```
 
-- **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor
+- **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor, runs on background thread
+- **Pre-warmed overlays**: WPF windows are created at startup so the hotkey response is near-instant (~100-200ms vs ~1s without pre-warming)
 - **Multi-monitor**: Each screen gets its own overlay; the primary monitor hosts the search bar, and search results sync across all overlays
 - **OCR**: `Windows.Media.Ocr.OcrEngine` (default) — built into Windows, fast, returns word-level bounding boxes
 - **OCR (optional)**: PaddleOCR via `PaddleOCRSharp` — more accurate, CPU-intensive (~5-6s extra, ~600 MB RAM)
