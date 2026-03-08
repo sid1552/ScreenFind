@@ -14,7 +14,7 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 
 ## Download
 
-**[Download ScreenFind.exe (v1.2.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
+**[Download ScreenFind.exe (v1.3.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
 
 Standalone exe — just download and double-click. No installation or .NET runtime needed.
 
