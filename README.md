@@ -51,6 +51,9 @@ Standalone exe — just download and double-click. No installation or .NET runti
 - **Fuzzy matching** — catches OCR misreads (e.g. "rn" → "m"), shown in blue
 - **Click-to-copy** — click any match highlight to copy its text
 - **Drag-to-select** — lasso any text on screen, auto-copied to clipboard (toggleable)
+
+![Drag to Select Demo](highlight-drag.gif)
+
 - **Customizable hotkey** — click the hotkey display in the main window to record a new one
 - **PaddleOCR engine** — optional high-accuracy OCR engine (opt-in in Settings). More accurate than Windows OCR on small/low-contrast text, but uses ~600 MB RAM (vs ~150 MB with Windows OCR) and takes ~5-6 seconds longer per capture
 - **Enhanced OCR mode** — optional image preprocessing for low-contrast text and desktop icons
