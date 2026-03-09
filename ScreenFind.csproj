@@ -13,11 +13,6 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="PaddleOCRSharp" Version="6.0.2" />
-    <PackageReference Include="Paddle.Runtime.win_x64" Version="3.2.2" />
-  </ItemGroup>
-
-  <ItemGroup>
     <Content Include="app.ico">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

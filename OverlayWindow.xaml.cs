@@ -11,7 +11,6 @@ using System.Windows.Interop;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Shapes;
-using PaddleOCRSharp;
 using SysDrawing = System.Drawing;
 using SysForms = System.Windows.Forms;
 
@@ -30,7 +29,6 @@ namespace ScreenFind
         private SysDrawing.Bitmap _capturedBitmap;
         private readonly bool _enhanceOcr;
         private readonly bool _dragToSelect;
-        private readonly bool _usePaddleOcr;
         private List<OcrLineInfo>? _ocrLines;
         private bool _ocrCompleted;
 
@@ -66,15 +64,13 @@ namespace ScreenFind
 
         // ────────────────────────────────────────────────────────────────
         public OverlayWindow(SysForms.Screen targetScreen,
-            bool enhanceOcr = false, bool dragToSelect = true, bool isPrimary = true,
-            bool usePaddleOcr = false)
+            bool enhanceOcr = false, bool dragToSelect = true, bool isPrimary = true)
         {
             InitializeComponent();
             _targetScreen = targetScreen;
             _enhanceOcr = enhanceOcr;
             _dragToSelect = dragToSelect;
             _isPrimary = isPrimary;
-            _usePaddleOcr = usePaddleOcr;
             Opacity = 0; // hidden until Activate()
 
             // Wire mouse events once (survive across Activate/Dismiss cycles)
@@ -257,54 +253,29 @@ namespace ScreenFind
                 // Preprocessing may upscale the image — need to scale OCR bounds back down
                 double preprocessScale = 1.0;
 
-                if (_usePaddleOcr)
+                // Windows OCR path: needs a temp file for WinRT StorageFile API
+                var tempPath = System.IO.Path.Combine(
+                    System.IO.Path.GetTempPath(), $"screenfind_{Guid.NewGuid():N}.bmp");
+
+                if (_enhanceOcr)
                 {
-                    // PaddleOCR path: pass Bitmap directly (no temp file needed)
-                    // If enhance is on, preprocess first then pass the enhanced bitmap
-                    if (_enhanceOcr)
-                    {
-                        var (enhanced, scaleFactor) = ImagePreprocessor.Enhance(_capturedBitmap);
-                        preprocessScale = scaleFactor;
-                        try
-                        {
-                            await RunPaddleOcrAsync(enhanced, preprocessScale);
-                        }
-                        finally
-                        {
-                            enhanced.Dispose();
-                        }
-                    }
-                    else
-                    {
-                        await RunPaddleOcrAsync(_capturedBitmap, preprocessScale);
-                    }
+                    var (enhanced, scaleFactor) = ImagePreprocessor.Enhance(_capturedBitmap);
+                    preprocessScale = scaleFactor;
+                    enhanced.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+                    enhanced.Dispose();
                 }
                 else
                 {
-                    // Windows OCR path: needs a temp file for WinRT StorageFile API
-                    var tempPath = System.IO.Path.Combine(
-                        System.IO.Path.GetTempPath(), $"screenfind_{Guid.NewGuid():N}.bmp");
+                    _capturedBitmap.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
+                }
 
-                    if (_enhanceOcr)
-                    {
-                        var (enhanced, scaleFactor) = ImagePreprocessor.Enhance(_capturedBitmap);
-                        preprocessScale = scaleFactor;
-                        enhanced.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
-                        enhanced.Dispose();
-                    }
-                    else
-                    {
-                        _capturedBitmap.Save(tempPath, SysDrawing.Imaging.ImageFormat.Bmp);
-                    }
-
-                    try
-                    {
-                        await RunWindowsOcrAsync(tempPath, preprocessScale);
-                    }
-                    finally
-                    {
-                        try { File.Delete(tempPath); } catch { /* best effort */ }
-                    }
+                try
+                {
+                    await RunWindowsOcrAsync(tempPath, preprocessScale);
+                }
+                finally
+                {
+                    try { File.Delete(tempPath); } catch { /* best effort */ }
                 }
             }
             catch (Exception ex)
@@ -383,91 +354,6 @@ namespace ScreenFind
                 };
                 lineInfo.FullText = string.Join(" ", lineInfo.Words.Select(w => w.Text));
                 _ocrLines.Add(lineInfo);
-            }
-
-            OnOcrCompleted();
-        }
-
-        /// <summary>
-        /// Run OCR using PaddleOCR (more accurate, especially for small/low-contrast text).
-        /// PaddleOCR is CPU-bound so we run it on a background thread via Task.Run()
-        /// to keep the WPF UI responsive.
-        ///
-        /// PaddleOCR returns line-level bounding boxes (not word-level like Windows OCR),
-        /// so we estimate per-word bounds by splitting proportionally by character count.
-        /// </summary>
-        private async Task RunPaddleOcrAsync(SysDrawing.Bitmap bitmap, double preprocessScale)
-        {
-            // Run PaddleOCR on a background thread (CPU-intensive)
-            // Passing the Bitmap directly avoids saving/reading a temp file.
-            // Task.Run moves this off the UI thread so the overlay stays responsive
-            var ocrResult = await Task.Run(() => PaddleOcrEngineManager.DetectText(bitmap));
-
-            // Convert PaddleOCR results into our OcrLineInfo/OcrWordInfo model
-            _ocrLines = new List<OcrLineInfo>();
-
-            if (ocrResult?.TextBlocks != null)
-            {
-                foreach (var block in ocrResult.TextBlocks)
-                {
-                    if (string.IsNullOrWhiteSpace(block.Text)) continue;
-
-                    // PaddleOCR gives us BoxPoints: 4 corners of a rotated rectangle.
-                    // We compute an axis-aligned bounding rect from the corner points.
-                    // BoxPoints format: [top-left, top-right, bottom-right, bottom-left]
-                    // Each point has X and Y properties.
-                    double minX = double.MaxValue, minY = double.MaxValue;
-                    double maxX = double.MinValue, maxY = double.MinValue;
-
-                    foreach (var point in block.BoxPoints)
-                    {
-                        if (point.X < minX) minX = point.X;
-                        if (point.Y < minY) minY = point.Y;
-                        if (point.X > maxX) maxX = point.X;
-                        if (point.Y > maxY) maxY = point.Y;
-                    }
-
-                    // Scale back down if image was preprocessed (upscaled)
-                    minX /= preprocessScale;
-                    minY /= preprocessScale;
-                    maxX /= preprocessScale;
-                    maxY /= preprocessScale;
-
-                    double blockWidth = maxX - minX;
-                    double blockHeight = maxY - minY;
-
-                    // Split the block text into words and estimate per-word bounding boxes.
-                    // PaddleOCR only gives line-level boxes, so we divide the line width
-                    // proportionally by character count (like splitting a ruler into segments).
-                    var words = block.Text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-                    int totalChars = words.Sum(w => w.Length);
-
-                    var wordInfos = new List<OcrWordInfo>();
-                    double currentX = minX;
-
-                    for (int i = 0; i < words.Length; i++)
-                    {
-                        // Each word gets a proportional slice of the total width
-                        double wordWidth = (totalChars > 0)
-                            ? blockWidth * words[i].Length / totalChars
-                            : blockWidth / words.Length;
-
-                        wordInfos.Add(new OcrWordInfo
-                        {
-                            Text = words[i],
-                            Bounds = new Rect(currentX, minY, wordWidth, blockHeight)
-                        });
-
-                        currentX += wordWidth;
-                    }
-
-                    var lineInfo = new OcrLineInfo
-                    {
-                        Words = wordInfos,
-                        FullText = string.Join(" ", words)
-                    };
-                    _ocrLines.Add(lineInfo);
-                }
             }
 
             OnOcrCompleted();
