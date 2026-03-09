@@ -136,7 +136,16 @@ namespace ScreenFind
             Show();
 
             if (_isPrimary)
-                SearchBox.Focus();
+            {
+                // Deferred so it runs after the window is fully rendered.
+                // Activate() brings window to foreground (system focus),
+                // then Keyboard.Focus explicitly routes keyboard input to the TextBox.
+                Dispatcher.BeginInvoke(() =>
+                {
+                    Activate();
+                    Keyboard.Focus(SearchBox);
+                });
+            }
 
             // Run OCR in the background
             await RunOcrAsync();
