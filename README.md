@@ -14,7 +14,7 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 
 ## Download
 
-**[Download ScreenFind.exe (v1.3.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
+**[Download ScreenFind.exe (v1.4.0)](https://github.com/sid1552/ScreenFind/releases/latest)**
 
 Standalone exe — just download and double-click. No installation or .NET runtime needed.
 
@@ -55,11 +55,13 @@ Standalone exe — just download and double-click. No installation or .NET runti
 ![Drag to Select Demo](highlight-drag.gif)
 
 - **Customizable hotkey** — click the hotkey display in the main window to record a new one
-- **PaddleOCR engine** — optional high-accuracy OCR engine (opt-in in Settings). More accurate than Windows OCR on small/low-contrast text, but uses ~600 MB RAM (vs ~150 MB with Windows OCR) and takes ~5-6 seconds longer per capture
+- **Dark / Light mode** — Catppuccin Mocha (dark) and Catppuccin Latte (light) themes
+- **High contrast mode** — extra-readable variant for both dark and light themes
+- **Auto-start with Windows** — launches minimized to system tray on login (no admin needed)
 - **Enhanced OCR mode** — optional image preprocessing for low-contrast text and desktop icons
 - **System tray** — minimize to tray, runs silently in background
 - **Multi-monitor support** — captures all monitors simultaneously, each gets its own overlay. Choose which monitors to include in Settings.
-- **Settings & About tabs** — reorganized main window with a clean tabbed UI for all preferences
+- **Grouped settings UI** — clean card-based layout with Hotkey, General, Overlay, and Monitors sections
 - **Settings persistence** — preferences saved to `%AppData%\ScreenFind\settings.json`
 
 ---
@@ -163,9 +165,9 @@ Hotkey pressed
 - **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor, runs on background thread
 - **Pre-warmed overlays**: WPF windows are created at startup so the hotkey response is near-instant (~100-200ms vs ~1s without pre-warming)
 - **Multi-monitor**: Each screen gets its own overlay; the primary monitor hosts the search bar, and search results sync across all overlays
-- **OCR**: `Windows.Media.Ocr.OcrEngine` (default) — built into Windows, fast, returns word-level bounding boxes
-- **OCR (optional)**: PaddleOCR via `PaddleOCRSharp` — more accurate, CPU-intensive (~5-6s extra, ~600 MB RAM)
+- **OCR**: `Windows.Media.Ocr.OcrEngine` — built into Windows, fast, returns word-level bounding boxes
 - **Image preprocessing**: Optional grayscale + contrast boost for difficult text
+- **Theming**: 4 themes via swappable resource dictionaries (DynamicResource), live switching
 - **Overlay**: WPF borderless topmost window with canvas-drawn highlights
 - **DPI**: Fully handled per monitor — works at 100%, 125%, 150%, 200% scaling
 - **Settings**: JSON config in `%AppData%\ScreenFind\settings.json`, includes monitor exclusion
