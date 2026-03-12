@@ -8,6 +8,7 @@ using System.Windows.Interop;
 using System.Windows.Controls;
 using System.Windows.Media;
 using SysDrawing = System.Drawing;
+using WinReg = Microsoft.Win32;
 using SysForms = System.Windows.Forms;
 
 namespace ScreenFind
@@ -58,6 +59,7 @@ namespace ScreenFind
             _hotkeyKey = _settings.HotkeyKey;
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
             DragToSelectCheckbox.IsChecked = _settings.DragToSelect;
+            StartWithWindowsCheckbox.IsChecked = _settings.StartWithWindows;
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             PopulateMonitorList();
             Loaded += MainWindow_Loaded;
@@ -220,6 +222,45 @@ namespace ScreenFind
             _settings.Save();
         }
 
+        private void StartWithWindowsCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return; // fired during InitializeComponent before settings loaded
+            bool enabled = StartWithWindowsCheckbox.IsChecked == true;
+            _settings.StartWithWindows = enabled;
+            _settings.Save();
+            SetStartWithWindows(enabled);
+        }
+
+        /// <summary>
+        /// Adds or removes a registry entry in HKCU\SOFTWARE\Microsoft\Windows\CurrentVersion\Run
+        /// so ScreenFind launches on Windows startup. The --startup flag tells the app to start
+        /// minimized to the system tray instead of showing the settings window.
+        /// </summary>
+        private static void SetStartWithWindows(bool enable)
+        {
+            const string keyName = "ScreenFind";
+            const string runKeyPath = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Run";
+
+            try
+            {
+                using var key = WinReg.Registry.CurrentUser.OpenSubKey(runKeyPath, writable: true);
+                if (key == null) return;
+
+                if (enable)
+                {
+                    // Use the current exe path — works for both dev (dotnet run) and published exe
+                    var exePath = Environment.ProcessPath ?? System.Diagnostics.Process.GetCurrentProcess().MainModule?.FileName;
+                    if (exePath != null)
+                        key.SetValue(keyName, $"\"{exePath}\" --startup");
+                }
+                else
+                {
+                    key.DeleteValue(keyName, throwOnMissingValue: false);
+                }
+            }
+            catch { /* best effort — may fail if registry is locked */ }
+        }
+
         // ────────────────────────────────────────────────────────────────
         //  Monitor picker — dynamically build checkboxes for each screen
         // ────────────────────────────────────────────────────────────────
@@ -247,7 +288,7 @@ namespace ScreenFind
                     Tag = screen.DeviceName, // store device name for the handler
                     FontSize = 12,
                     Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#A6ADC8")),
-                    HorizontalAlignment = HorizontalAlignment.Center,
+                    HorizontalAlignment = HorizontalAlignment.Left,
                     Margin = new Thickness(0, 6, 0, 0)
                 };
 
@@ -407,6 +448,15 @@ namespace ScreenFind
                     MessageBoxButton.OK,
                     MessageBoxImage.Warning);
             }
+
+            // If launched with --startup flag (from Windows auto-start), minimize to tray
+            var args = Environment.GetCommandLineArgs();
+            if (args.Contains("--startup"))
+            {
+                Hide();
+                if (_trayIcon != null)
+                    _trayIcon.Visible = true;
+            }
         }
 
         // ────────────────────────────────────────────────────────────────
@@ -432,6 +482,7 @@ namespace ScreenFind
             HotkeyText.Text = "Press a key combo...";
             HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9E2AF"));
             HotkeyHint.Text = "Esc to cancel";
+            HotkeyHint.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9E2AF"));
             PreviewKeyDown += HotkeyCapture_PreviewKeyDown;
         }
 
@@ -505,6 +556,7 @@ namespace ScreenFind
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5E0DC"));
             HotkeyHint.Text = "click to change";
+            HotkeyHint.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6C7086"));
         }
 
         /// <summary>Builds a display string like "Ctrl + Shift + F" from Win32 modifier flags and VK code.</summary>
