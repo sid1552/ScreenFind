@@ -1,9 +1,9 @@
 # ScreenFind — Ctrl+F for Your Entire Screen
 
 A lightweight Windows tool that lets you search for any text visible on your screen using OCR.
-Press a hotkey anywhere → type your search → see matches highlighted live on screen.
+Press a hotkey anywhere, type your search, see matches highlighted live on screen.
 
-Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, no dependencies.
+Uses the **built-in Windows 10/11 OCR engine** — no cloud APIs, no dependencies, runs 100% locally.
 
 <a href="https://buymeacoffee.com/siddharthsqn"><img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" height="50"></a>
 <a href="https://github.com/sponsors/sid1552"><img src="https://img.shields.io/badge/Sponsor_on_GitHub-ea4aaa?logo=githubsponsors&logoColor=white&style=for-the-badge" alt="GitHub Sponsors" height="50"></a>
@@ -19,13 +19,13 @@ Uses the **built-in Windows 10/11 OCR engine** — no Tesseract, no cloud APIs, 
 Standalone exe — just download and double-click. No installation or .NET runtime needed.
 
 <details>
-<summary>VirusTotal scan results — 0/67 clean (click to expand)</summary>
+<summary>VirusTotal scan results</summary>
 
 ![VirusTotal Results](virustotal.png)
 
 [View full report on VirusTotal](https://www.virustotal.com/gui/file/102811242c2d3aa7306e210c40fc88e3907199a3a157c811724477a292f7b7de/detection)
 
-**0/67 — no security vendors flagged this file as malicious.** The source code is fully open and auditable in this repo.
+0/67 — no security vendors flagged this file. Source code is fully open and auditable.
 
 </details>
 
@@ -48,7 +48,7 @@ Standalone exe — just download and double-click. No installation or .NET runti
 ## Features
 
 - **Real-time search** — matches highlighted as you type
-- **Fuzzy matching** — catches OCR misreads (e.g. "rn" → "m"), shown in blue
+- **Fuzzy matching** — catches OCR misreads (e.g. "rn" read as "m"), shown in blue
 - **Click-to-copy** — click any match highlight to copy its text
 - **Drag-to-select** — lasso any text on screen, auto-copied to clipboard (toggleable)
 
@@ -60,7 +60,7 @@ Standalone exe — just download and double-click. No installation or .NET runti
 - **Auto-start with Windows** — launches minimized to system tray on login (no admin needed)
 - **Enhanced OCR mode** — optional image preprocessing for low-contrast text and desktop icons
 - **System tray** — minimize to tray, runs silently in background
-- **Multi-monitor support** — captures all monitors simultaneously, each gets its own overlay. Choose which monitors to include in Settings.
+- **Multi-monitor support** — captures all monitors simultaneously, each gets its own overlay
 - **Grouped settings UI** — clean card-based layout with Hotkey, General, Overlay, and Monitors sections
 - **Settings persistence** — preferences saved to `%AppData%\ScreenFind\settings.json`
 
@@ -84,38 +84,9 @@ Standalone exe — just download and double-click. No installation or .NET runti
 
 ## Changing the Hotkey
 
-Click the hotkey display in the main window → press your desired key combo → done. The new hotkey is saved automatically.
+Click the hotkey display in the main window, press your desired key combo, done. The new hotkey is saved automatically.
 
 Requires at least one modifier (Ctrl, Alt, Shift, or Win) plus a key.
-
----
-
-## Building from Source
-
-### 1. Install .NET 8 SDK
-
-Download from: **https://dotnet.microsoft.com/download/dotnet/8.0**
-
-Verify with:
-```
-dotnet --version
-```
-
-### 2. Clone & Run
-
-```
-git clone https://github.com/sid1552/ScreenFind.git
-cd ScreenFind
-dotnet run
-```
-
-### 3. Build Standalone Exe
-
-```
-dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true
-```
-
-Output: `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\ScreenFind.exe`
 
 ---
 
@@ -124,53 +95,24 @@ Output: `bin\Release\net8.0-windows10.0.19041.0\win-x64\publish\ScreenFind.exe`
 - **Windows 10** (build 19041 / version 2004) or later, or **Windows 11**
 - An OCR language pack installed (English is included by default)
 
-For building from source: **.NET 8 SDK**
-
 ---
 
 ## Troubleshooting
 
 **"Could not register hotkey"**
-→ Another app is using that shortcut. Click the hotkey display to choose a different one.
+Another app is using that shortcut. Click the hotkey display to choose a different one.
 
 **OCR returns no results / "No OCR language pack"**
-→ Go to **Windows Settings → Time & Language → Language** → Make sure you have a language installed with the **Basic typing** option.
+Go to **Windows Settings > Time & Language > Language** and make sure you have a language installed with the **Basic typing** option.
 
 **Highlights are offset / wrong position**
-→ This can happen with unusual DPI setups. Multi-monitor is fully supported — each monitor gets its own overlay with independent DPI scaling. If a specific monitor causes issues, you can exclude it in Settings.
+This can happen with unusual DPI setups. Multi-monitor is fully supported — each monitor gets its own overlay with independent DPI scaling. If a specific monitor causes issues, you can exclude it in Settings.
 
 ---
 
-## Architecture
+## Contributing
 
-```
-App startup
-    └── Pre-warm overlay windows (HWND + layout cached, invisible)
-
-Hotkey pressed
-    │
-    ├── Each monitor captured (GDI+ BitBlt, background thread)
-    │
-    ├── Pre-warmed overlays activated instantly (~100-200ms total)
-    │       ├── Frozen screenshot (dimmed)
-    │       ├── Search bar (primary monitor only)
-    │       ├── Selection canvas (drag-to-select)
-    │       └── Search synced across all overlays
-    │
-    └── OCR runs async per monitor (~200-500ms)
-            │
-            └── Results ready → search + highlight as you type
-```
-
-- **Screen capture**: GDI+ `CopyFromScreen` — one capture per monitor, runs on background thread
-- **Pre-warmed overlays**: WPF windows are created at startup so the hotkey response is near-instant (~100-200ms vs ~1s without pre-warming)
-- **Multi-monitor**: Each screen gets its own overlay; the primary monitor hosts the search bar, and search results sync across all overlays
-- **OCR**: `Windows.Media.Ocr.OcrEngine` — built into Windows, fast, returns word-level bounding boxes
-- **Image preprocessing**: Optional grayscale + contrast boost for difficult text
-- **Theming**: 4 themes via swappable resource dictionaries (DynamicResource), live switching
-- **Overlay**: WPF borderless topmost window with canvas-drawn highlights
-- **DPI**: Fully handled per monitor — works at 100%, 125%, 150%, 200% scaling
-- **Settings**: JSON config in `%AppData%\ScreenFind\settings.json`, includes monitor exclusion
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for build instructions, architecture overview, and development details.
 
 ---
 

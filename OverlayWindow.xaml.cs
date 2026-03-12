@@ -18,51 +18,41 @@ namespace ScreenFind
 {
     public partial class OverlayWindow : Window
     {
-        // ─── Win32 for precise multi-monitor positioning ──────────────
         [DllImport("user32.dll", SetLastError = true)]
         private static extern bool MoveWindow(IntPtr hWnd, int X, int Y, int nWidth, int nHeight, bool bRepaint);
 
         [DllImport("user32.dll")]
         private static extern uint GetDpiForWindow(IntPtr hwnd);
 
-        // ─── OCR data ──────────────────────────────────────────────────
         private SysDrawing.Bitmap _capturedBitmap;
         private readonly bool _enhanceOcr;
         private readonly bool _dragToSelect;
         private List<OcrLineInfo>? _ocrLines;
         private bool _ocrCompleted;
 
-        // ─── Multi-monitor ─────────────────────────────────────────────
         private readonly SysForms.Screen _targetScreen;
         private readonly bool _isPrimary;
-        private string _pendingQuery = "";   // search query from primary (for secondaries)
+        private string _pendingQuery = "";
 
-        // ─── Events for cross-monitor coordination ─────────────────────
-        /// <summary>Fired by primary when the search query changes.</summary>
         public event Action<string>? SearchChanged;
-        /// <summary>Fired when Escape is pressed — tells MainWindow to close all overlays.</summary>
         public event Action? CloseAllRequested;
 
-        // ─── Search state ──────────────────────────────────────────────
         private List<MatchResult> _matches = new();
         private int _currentIndex = -1;
 
-        // ─── DPI scaling (physical pixels → WPF DIPs) ──────────────────
+        // Physical pixels to WPF DIPs
         private double _scaleX = 1.0;
         private double _scaleY = 1.0;
 
-        // ─── Drag-to-select state ────────────────────────────────────────
         private bool _isDragging;
-        private Point _dragStartDip;              // mouse-down position in WPF DIPs
-        private Rectangle? _lassoRect;            // the visual drag rectangle
+        private Point _dragStartDip;
+        private Rectangle? _lassoRect;
         private List<OcrWordInfo> _selectedWords = new();
-        private List<Rectangle> _selectionHighlights = new();  // reusable highlight pool
+        private List<Rectangle> _selectionHighlights = new();
 
-        // ─── "Copied!" feedback timer (single instance to prevent race conditions)
         private System.Windows.Threading.DispatcherTimer? _feedbackTimer;
         private string _savedMatchInfoText = "";
 
-        // ────────────────────────────────────────────────────────────────
         public OverlayWindow(SysForms.Screen targetScreen,
             bool enhanceOcr = false, bool dragToSelect = true, bool isPrimary = true)
         {
@@ -71,14 +61,12 @@ namespace ScreenFind
             _enhanceOcr = enhanceOcr;
             _dragToSelect = dragToSelect;
             _isPrimary = isPrimary;
-            Opacity = 0; // hidden until Activate()
+            Opacity = 0;
 
-            // Wire mouse events once (survive across Activate/Dismiss cycles)
             SelectionCanvas.MouseLeftButtonDown += SelectionCanvas_MouseLeftButtonDown;
             SelectionCanvas.MouseMove += SelectionCanvas_MouseMove;
             SelectionCanvas.MouseLeftButtonUp += SelectionCanvas_MouseLeftButtonUp;
 
-            // Secondary monitors: hide search bar permanently
             if (!_isPrimary)
             {
                 SearchBarBorder.Visibility = Visibility.Collapsed;
@@ -86,41 +74,23 @@ namespace ScreenFind
             }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  PRE-WARMING — forces HWND creation + full WPF layout at startup
-        //  so the first hotkey press is near-instant.
-        // ════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Pre-create the native window (HWND) and run the first WPF layout pass.
-        /// The overlay stays invisible (Opacity=0). Call once at startup.
+        /// Show+Hide at Opacity=0 forces HWND creation and WPF layout,
+        /// so the first hotkey press is near-instant.
         /// </summary>
         public void Prewarm()
         {
-            // Show() creates the HWND and triggers layout, but Opacity=0 so nothing visible.
-            // Then immediately Hide() so it's not in the way.
             Show();
             Hide();
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  ACTIVATE / DISMISS — reuse the pre-warmed window each time
-        // ════════════════════════════════════════════════════════════════
-
-        /// <summary>
-        /// Set new screenshot, reset all state, show the overlay, and start OCR.
-        /// Called each time the hotkey fires.
-        /// </summary>
         public async void Activate(SysDrawing.Bitmap screenshot)
         {
-            // Dispose previous screenshot
             _capturedBitmap?.Dispose();
             _capturedBitmap = screenshot;
 
-            // Reset all search/highlight/selection state
             ResetState();
 
-            // Reposition on the target monitor and update DPI
             var hwnd = new WindowInteropHelper(this).Handle;
             var bounds = _targetScreen.Bounds;
             MoveWindow(hwnd, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
@@ -128,18 +98,14 @@ namespace ScreenFind
             _scaleX = dpi / 96.0;
             _scaleY = dpi / 96.0;
 
-            // Show the captured screenshot as background
             SetScreenshotBackground();
 
-            // Make visible and show
             Opacity = 1;
             Show();
 
             if (_isPrimary)
             {
-                // Deferred so it runs after the window is fully rendered.
-                // Activate() brings window to foreground (system focus),
-                // then Keyboard.Focus explicitly routes keyboard input to the TextBox.
+                // Deferred so it runs after the window is fully rendered
                 Dispatcher.BeginInvoke(() =>
                 {
                     Activate();
@@ -147,26 +113,17 @@ namespace ScreenFind
                 });
             }
 
-            // Run OCR in the background
             await RunOcrAsync();
         }
 
-        /// <summary>
-        /// Hide the overlay without destroying it. The window stays in memory
-        /// so the next Activate() is near-instant (no HWND/layout overhead).
-        /// </summary>
         public void Dismiss()
         {
             Opacity = 0;
             Hide();
         }
 
-        /// <summary>
-        /// Clear all state so the overlay is fresh for the next Activate() call.
-        /// </summary>
         private void ResetState()
         {
-            // Search state
             SearchBox.Text = "";
             _ocrLines = null;
             _ocrCompleted = false;
@@ -175,10 +132,8 @@ namespace ScreenFind
             _pendingQuery = "";
             MatchInfo.Text = "";
 
-            // Highlights
             HighlightCanvas.Children.Clear();
 
-            // Selection state
             _isDragging = false;
             _selectedWords.Clear();
             SelectionCanvas.Children.Clear();
@@ -187,40 +142,29 @@ namespace ScreenFind
             SelectionCanvas.IsHitTestVisible = false;
             SelectionCanvas.Cursor = Cursors.Arrow;
 
-            // Loading badge
             if (_isPrimary)
                 LoadingBadge.Visibility = Visibility.Visible;
 
-            // Feedback timer
             _feedbackTimer?.Stop();
             _savedMatchInfoText = "";
         }
 
-        /// <summary>
-        /// Fires after HWND is created but BEFORE first render — positions the window
-        /// on the correct monitor. Only runs once (during Prewarm or first Show).
-        /// </summary>
         protected override void OnSourceInitialized(EventArgs e)
         {
             base.OnSourceInitialized(e);
 
-            // Position window on target monitor
             var hwnd = new WindowInteropHelper(this).Handle;
             var bounds = _targetScreen.Bounds;
             MoveWindow(hwnd, bounds.X, bounds.Y, bounds.Width, bounds.Height, true);
 
-            // Get DPI
             uint dpi = GetDpiForWindow(hwnd);
             _scaleX = dpi / 96.0;
             _scaleY = dpi / 96.0;
-
-            // Don't set Opacity=1 here — Activate() controls visibility
         }
 
         /// <summary>
-        /// Convert the System.Drawing.Bitmap to a WPF BitmapSource and display it.
-        /// The BitmapSource DPI is set to the screen's actual DPI so that
-        /// 1 image pixel = 1 physical screen pixel → pixel-perfect alignment.
+        /// BitmapSource DPI is set to screen's actual DPI so
+        /// 1 image pixel = 1 physical screen pixel.
         /// </summary>
         private void SetScreenshotBackground()
         {
@@ -234,15 +178,15 @@ namespace ScreenFind
                 var bitmapSource = BitmapSource.Create(
                     bitmapData.Width,
                     bitmapData.Height,
-                    96 * _scaleX,   // DPI X
-                    96 * _scaleY,   // DPI Y
+                    96 * _scaleX,
+                    96 * _scaleY,
                     PixelFormats.Bgra32,
                     null,
                     bitmapData.Scan0,
                     bitmapData.Stride * bitmapData.Height,
                     bitmapData.Stride);
 
-                bitmapSource.Freeze(); // allow cross-thread access
+                bitmapSource.Freeze();
                 ScreenshotImage.Source = bitmapSource;
             }
             finally
@@ -251,18 +195,13 @@ namespace ScreenFind
             }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  OCR  (uses the Windows 10+ built-in OCR engine)
-        // ════════════════════════════════════════════════════════════════
-
         private async Task RunOcrAsync()
         {
             try
             {
-                // Preprocessing may upscale the image — need to scale OCR bounds back down
                 double preprocessScale = 1.0;
 
-                // Windows OCR path: needs a temp file for WinRT StorageFile API
+                // WinRT StorageFile API requires a temp file
                 var tempPath = System.IO.Path.Combine(
                     System.IO.Path.GetTempPath(), $"screenfind_{Guid.NewGuid():N}.bmp");
 
@@ -297,13 +236,8 @@ namespace ScreenFind
             }
         }
 
-        /// <summary>
-        /// Run OCR using the Windows 10+ built-in WinRT OCR engine.
-        /// This is the original/default path — fast but less accurate on small text.
-        /// </summary>
         private async Task RunWindowsOcrAsync(string tempPath, double preprocessScale)
         {
-            // Open via WinRT StorageFile → BitmapDecoder → SoftwareBitmap
             var storageFile = await Windows.Storage.StorageFile
                 .GetFileFromPathAsync(tempPath);
 
@@ -317,13 +251,11 @@ namespace ScreenFind
                 Windows.Graphics.Imaging.BitmapPixelFormat.Bgra8,
                 Windows.Graphics.Imaging.BitmapAlphaMode.Premultiplied);
 
-            // Create OCR engine (uses the user's installed languages)
             var engine = Windows.Media.Ocr.OcrEngine
                 .TryCreateFromUserProfileLanguages();
 
             if (engine == null)
             {
-                // Fallback: try English
                 engine = Windows.Media.Ocr.OcrEngine
                     .TryCreateFromLanguage(
                         new Windows.Globalization.Language("en-US"));
@@ -339,18 +271,14 @@ namespace ScreenFind
                 return;
             }
 
-            // Run OCR
             var ocrResult = await engine.RecognizeAsync(softwareBitmap);
 
-            // Convert results into our data model
             _ocrLines = new List<OcrLineInfo>();
             foreach (var line in ocrResult.Lines)
             {
                 var lineInfo = new OcrLineInfo
                 {
-                    // Divide bounds by preprocessScale to map back to original
-                    // screen pixels (upscaling makes the image larger, so OCR
-                    // returns larger coords that we need to shrink back down)
+                    // Divide by preprocessScale to map upscaled coords back to screen pixels
                     Words = line.Words.Select(w => new OcrWordInfo
                     {
                         Text = w.Text,
@@ -368,11 +296,6 @@ namespace ScreenFind
             OnOcrCompleted();
         }
 
-        /// <summary>
-        /// Shared logic that runs after either OCR engine finishes.
-        /// Updates UI state: hides loading badge, enables drag-to-select,
-        /// and applies any pending search query.
-        /// </summary>
         private void OnOcrCompleted()
         {
             _ocrCompleted = true;
@@ -382,59 +305,41 @@ namespace ScreenFind
                 if (_isPrimary)
                     LoadingBadge.Visibility = Visibility.Collapsed;
 
-                // Enable drag-to-select now that OCR data is ready (if enabled)
                 if (_dragToSelect)
                 {
                     SelectionCanvas.IsHitTestVisible = true;
                     SelectionCanvas.Cursor = Cursors.Cross;
                 }
 
-                // Apply any pending search query
-                // Primary: user may have typed while OCR was running
-                // Secondary: primary may have broadcast a query before OCR finished
+                // User may have typed while OCR was running
                 var query = _isPrimary ? SearchBox.Text : _pendingQuery;
                 if (!string.IsNullOrEmpty(query))
                     UpdateHighlights(query);
             });
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  SEARCH  (called every time the user types a character)
-        // ════════════════════════════════════════════════════════════════
-
         private void SearchBox_TextChanged(object sender, TextChangedEventArgs e)
         {
-            // Clear any drag selection when the user types
             SelectionCanvas.Children.Clear();
             _selectedWords.Clear();
 
             if (_ocrCompleted)
                 UpdateHighlights(SearchBox.Text);
 
-            // Broadcast search query to secondary overlays
             SearchChanged?.Invoke(SearchBox.Text);
         }
 
-        /// <summary>
-        /// Called by MainWindow to apply the primary's search query on this (secondary) overlay.
-        /// </summary>
         public void ApplySearch(string query)
         {
             _pendingQuery = query;
             if (!_ocrCompleted) return;
 
-            // Clear drag selection
             SelectionCanvas.Children.Clear();
             _selectedWords.Clear();
 
             UpdateHighlights(query);
         }
 
-        /// <summary>
-        /// Find all occurrences of <paramref name="query"/> in the OCR text
-        /// and draw highlight rectangles on screen.
-        /// Supports multi-word queries (matches substring across a line).
-        /// </summary>
         private void UpdateHighlights(string query)
         {
             HighlightCanvas.Children.Clear();
@@ -447,15 +352,12 @@ namespace ScreenFind
                 return;
             }
 
-            // Track which (lineIndex, wordIndex) pairs are covered by exact matches
             var exactMatchedWords = new HashSet<(int LineIdx, int WordIdx)>();
 
-            // ── Pass 1: Exact substring match (unchanged logic) ──
             for (int lineIdx = 0; lineIdx < _ocrLines.Count; lineIdx++)
             {
                 var line = _ocrLines[lineIdx];
 
-                // Build a map: character offset → word index
                 var wordSpans = new List<(int Start, int End, int WordIdx)>();
                 int charPos = 0;
                 for (int i = 0; i < line.Words.Count; i++)
@@ -466,7 +368,6 @@ namespace ScreenFind
                     charPos = end + 2; // +1 for last char, +1 for the space
                 }
 
-                // Search for the query in the full line text
                 int searchFrom = 0;
                 while (searchFrom <= line.FullText.Length - query.Length)
                 {
@@ -476,7 +377,6 @@ namespace ScreenFind
 
                     int matchEnd = idx + query.Length - 1;
 
-                    // Which words overlap with chars [idx..matchEnd]?
                     var hitSpans = wordSpans
                         .Where(s => s.End >= idx && s.Start <= matchEnd)
                         .ToList();
@@ -485,7 +385,6 @@ namespace ScreenFind
 
                     if (hitWords.Count > 0)
                     {
-                        // Mark these words as exact-matched
                         foreach (var s in hitSpans)
                             exactMatchedWords.Add((lineIdx, s.WordIdx));
 
@@ -505,7 +404,6 @@ namespace ScreenFind
                 }
             }
 
-            // ── Pass 2: Fuzzy word-level match (skip for very short queries) ──
             if (query.Length >= 3)
             {
                 var fuzzyMatches = FuzzyMatcher.FindFuzzyMatches(
@@ -513,10 +411,8 @@ namespace ScreenFind
                 _matches.AddRange(fuzzyMatches);
             }
 
-            // Draw all highlights
             DrawAllHighlights();
 
-            // Auto-select first match
             if (_matches.Count > 0)
             {
                 _currentIndex = 0;
@@ -526,11 +422,6 @@ namespace ScreenFind
             UpdateMatchInfoText();
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  HIGHLIGHT RENDERING
-        // ════════════════════════════════════════════════════════════════
-
-        // Colors
         private static readonly SolidColorBrush MatchStroke =
             new(Color.FromArgb(255, 250, 200, 50));
         private static readonly SolidColorBrush MatchFill =
@@ -541,33 +432,26 @@ namespace ScreenFind
         private static readonly SolidColorBrush CurrentFill =
             new(Color.FromArgb(110, 255, 150, 0));
 
-        // Fuzzy match colors (blue-ish tint to distinguish from exact matches)
         private static readonly SolidColorBrush FuzzyStroke =
             new(Color.FromArgb(255, 80, 160, 255));
         private static readonly SolidColorBrush FuzzyFill =
             new(Color.FromArgb(55, 80, 160, 255));
 
-        // Current fuzzy match (brighter blue, like orange is to yellow)
         private static readonly SolidColorBrush CurrentFuzzyStroke =
             new(Color.FromArgb(255, 30, 120, 255));
         private static readonly SolidColorBrush CurrentFuzzyFill =
             new(Color.FromArgb(110, 30, 120, 255));
 
-        // Drag-to-select colors (green)
         private static readonly SolidColorBrush SelectionStroke =
             new(Color.FromArgb(255, 50, 205, 50));
         private static readonly SolidColorBrush SelectionFill =
             new(Color.FromArgb(55, 50, 205, 50));
 
-        // Lasso rectangle (white dashed)
         private static readonly SolidColorBrush LassoStroke =
             new(Color.FromArgb(180, 255, 255, 255));
         private static readonly SolidColorBrush LassoFill =
             new(Color.FromArgb(20, 255, 255, 255));
 
-        /// <summary>
-        /// Draw yellow highlight rectangles for every match.
-        /// </summary>
         private void DrawAllHighlights()
         {
             HighlightCanvas.Children.Clear();
@@ -578,7 +462,6 @@ namespace ScreenFind
                 var padded = new Rect(
                     m.Bounds.X - 4, m.Bounds.Y - 4,
                     m.Bounds.Width + 8, m.Bounds.Height + 8);
-                // Blue for fuzzy matches, yellow for exact matches
                 var stroke = m.IsFuzzy ? FuzzyStroke : MatchStroke;
                 var fill = m.IsFuzzy ? FuzzyFill : MatchFill;
                 var rect = MakeRect(padded, stroke, 2, fill, 5, i);
@@ -586,15 +469,11 @@ namespace ScreenFind
             }
         }
 
-        /// <summary>
-        /// Draw an extra, brighter rectangle for the currently-selected match.
-        /// </summary>
         private void DrawCurrentMatchHighlight()
         {
             if (_currentIndex < 0 || _currentIndex >= _matches.Count) return;
 
             var m = _matches[_currentIndex];
-            // Slightly larger rect with a brighter color
             var inflated = new Rect(
                 m.Bounds.X - 6, m.Bounds.Y - 6,
                 m.Bounds.Width + 12, m.Bounds.Height + 12);
@@ -606,9 +485,8 @@ namespace ScreenFind
         }
 
         /// <summary>
-        /// Helper: create a WPF Rectangle positioned on the canvas.
-        /// Coordinates are converted from physical pixels → DIPs.
-        /// When matchIndex is provided, the rect becomes clickable (copies match text).
+        /// Coordinates are converted from physical pixels to DIPs.
+        /// When matchIndex is provided, the rect becomes clickable.
         /// </summary>
         private Rectangle MakeRect(
             Rect pixelBounds,
@@ -654,7 +532,6 @@ namespace ScreenFind
                 int exact = _matches.Count(m => !m.IsFuzzy);
                 int fuzzy = _matches.Count(m => m.IsFuzzy);
 
-                // e.g. "1 / 4 (3 exact, 1 fuzzy)" or "1 / 3" if no fuzzy
                 string position = _currentIndex >= 0
                     ? $"{_currentIndex + 1} / {_matches.Count}"
                     : $"{_matches.Count} found";
@@ -666,16 +543,11 @@ namespace ScreenFind
             }
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  KEYBOARD NAVIGATION
-        // ════════════════════════════════════════════════════════════════
-
         private void Window_PreviewKeyDown(object sender, KeyEventArgs e)
         {
             switch (e.Key)
             {
                 case Key.Escape:
-                    // Tell MainWindow to dismiss ALL overlays (hide, not close)
                     CloseAllRequested?.Invoke();
                     e.Handled = true;
                     break;
@@ -697,7 +569,6 @@ namespace ScreenFind
                     break;
 
                 case Key.C:
-                    // Ctrl+C: copy current match text (only if nothing selected in search box)
                     if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)
                         && SearchBox.SelectionLength == 0)
                     {
@@ -714,7 +585,6 @@ namespace ScreenFind
 
             _currentIndex = (_currentIndex + direction + _matches.Count) % _matches.Count;
 
-            // Redraw: all highlights + current highlight on top
             DrawAllHighlights();
             DrawCurrentMatchHighlight();
             UpdateMatchInfoText();
@@ -742,13 +612,8 @@ namespace ScreenFind
             ShowCopiedFeedback($"Copied: \"{text}\"");
         }
 
-        /// <summary>
-        /// Show temporary feedback in the MatchInfo area. Uses a single timer
-        /// so rapid copies don't corrupt the text.
-        /// </summary>
         private void ShowCopiedFeedback(string message)
         {
-            // Stop any existing feedback timer and save the real text (only if not mid-feedback)
             if (_feedbackTimer == null || !_feedbackTimer.IsEnabled)
                 _savedMatchInfoText = MatchInfo.Text;
             else
@@ -768,20 +633,14 @@ namespace ScreenFind
             _feedbackTimer.Start();
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  DRAG-TO-SELECT
-        // ════════════════════════════════════════════════════════════════
-
         private void SelectionCanvas_MouseLeftButtonDown(object sender, MouseButtonEventArgs e)
         {
             var clickPosDip = e.GetPosition(SelectionCanvas);
 
-            // Check if the click is on an existing match highlight — forward to click-to-copy
             if (_matches.Count > 0)
             {
                 for (int i = 0; i < _matches.Count; i++)
                 {
-                    // Convert match bounds (physical pixels) to DIPs for hit-testing
                     var b = _matches[i].Bounds;
                     var dipRect = new Rect(
                         b.X / _scaleX - 4, b.Y / _scaleY - 4,
@@ -796,14 +655,12 @@ namespace ScreenFind
                 }
             }
 
-            // Start a new drag selection
             _isDragging = true;
             _dragStartDip = clickPosDip;
             _selectedWords.Clear();
             SelectionCanvas.Children.Clear();
-            _selectionHighlights.Clear(); // pool was removed from canvas, reset it
+            _selectionHighlights.Clear();
 
-            // Create the dashed lasso rectangle
             _lassoRect = new Rectangle
             {
                 Stroke = LassoStroke,
@@ -828,7 +685,6 @@ namespace ScreenFind
 
             var currentPos = e.GetPosition(SelectionCanvas);
 
-            // Update lasso rect position and size
             double x = Math.Min(_dragStartDip.X, currentPos.X);
             double y = Math.Min(_dragStartDip.Y, currentPos.Y);
             double w = Math.Abs(currentPos.X - _dragStartDip.X);
@@ -839,7 +695,6 @@ namespace ScreenFind
             _lassoRect.Width = w;
             _lassoRect.Height = h;
 
-            // Convert DIP lasso rect → physical pixels for OCR bounds comparison
             var physicalRect = new Rect(
                 x * _scaleX, y * _scaleY,
                 w * _scaleX, h * _scaleY);
@@ -854,7 +709,6 @@ namespace ScreenFind
             _isDragging = false;
             SelectionCanvas.ReleaseMouseCapture();
 
-            // Remove the lasso rect (keep word highlights)
             if (_lassoRect != null)
             {
                 SelectionCanvas.Children.Remove(_lassoRect);
@@ -863,29 +717,22 @@ namespace ScreenFind
 
             if (_selectedWords.Count > 0)
             {
-                // Sort words in reading order and build text
                 var text = BuildSelectedText(_selectedWords);
                 ShowSelectionCopiedFeedback(text);
 
-                // Copy to clipboard on a background STA thread — zero UI blocking
                 CopyToClipboardBackground(text);
             }
 
-            // Re-focus the search box so keyboard shortcuts keep working
             SearchBox.Focus();
             e.Handled = true;
         }
 
-        /// <summary>
-        /// Find all OCR words that intersect the lasso rect and draw green highlights.
-        /// </summary>
         private void UpdateSelectionHighlights(Rect physicalLassoRect)
         {
             _selectedWords.Clear();
 
             if (_ocrLines == null) return;
 
-            // Collect matching words
             int matchIndex = 0;
             foreach (var line in _ocrLines)
             {
@@ -895,7 +742,6 @@ namespace ScreenFind
                     {
                         _selectedWords.Add(word);
 
-                        // Reuse existing rectangle or create a new one
                         Rectangle r;
                         if (matchIndex < _selectionHighlights.Count)
                         {
@@ -927,20 +773,14 @@ namespace ScreenFind
                 }
             }
 
-            // Hide unused rectangles from the pool (instead of removing them)
             for (int i = matchIndex; i < _selectionHighlights.Count; i++)
                 _selectionHighlights[i].Visibility = Visibility.Collapsed;
         }
 
-        /// <summary>
-        /// Build readable text from selected words — grouped into lines by Y proximity,
-        /// sorted left-to-right within each line.
-        /// </summary>
         private static string BuildSelectedText(List<OcrWordInfo> words)
         {
             if (words.Count == 0) return "";
 
-            // Sort by Y first, then X
             var sorted = words.OrderBy(w => w.Bounds.Y).ThenBy(w => w.Bounds.X).ToList();
 
             var lines = new List<List<OcrWordInfo>>();
@@ -948,7 +788,6 @@ namespace ScreenFind
 
             for (int i = 1; i < sorted.Count; i++)
             {
-                // If this word's Y is close to the previous word's Y, same line
                 double threshold = sorted[i].Bounds.Height * 0.5;
                 if (Math.Abs(sorted[i].Bounds.Y - currentLine[0].Bounds.Y) < threshold)
                 {
@@ -962,15 +801,11 @@ namespace ScreenFind
             }
             lines.Add(currentLine);
 
-            // Sort each line left-to-right, join words with spaces, join lines with newlines
             return string.Join("\n",
                 lines.Select(line =>
                     string.Join(" ", line.OrderBy(w => w.Bounds.X).Select(w => w.Text))));
         }
 
-        /// <summary>
-        /// Show "Copied!" feedback for drag-selected text.
-        /// </summary>
         private void ShowSelectionCopiedFeedback(string text)
         {
             var truncated = text.Length > 60 ? text.Substring(0, 60) + "..." : text;
@@ -978,13 +813,8 @@ namespace ScreenFind
             ShowCopiedFeedback($"Copied: \"{truncated}\"");
         }
 
-        // ════════════════════════════════════════════════════════════════
-        //  CLIPBOARD HELPER
-        // ════════════════════════════════════════════════════════════════
-
         /// <summary>
-        /// Try to set clipboard text with retries — the clipboard can be locked
-        /// by other apps, causing CLIPBRD_E_CANT_OPEN (COMException).
+        /// Retries because the clipboard can be locked by other apps (COMException).
         /// </summary>
         private static void TrySetClipboard(string text)
         {
@@ -1003,13 +833,11 @@ namespace ScreenFind
         }
 
         /// <summary>
-        /// Fully non-blocking clipboard copy — runs all attempts on a background thread
-        /// using Win32 directly, so the UI thread never blocks.
+        /// Clipboard.SetText must run on an STA thread, so we spin up
+        /// a short-lived one to avoid blocking the UI thread.
         /// </summary>
         private void CopyToClipboardBackground(string text)
         {
-            // Clipboard.SetText must run on an STA thread. Spin up a short-lived
-            // STA thread so the UI thread is completely free.
             var thread = new System.Threading.Thread(() =>
             {
                 for (int i = 0; i < 5; i++)
@@ -1029,10 +857,6 @@ namespace ScreenFind
             thread.IsBackground = true;
             thread.Start();
         }
-
-        // ════════════════════════════════════════════════════════════════
-        //  CLEANUP
-        // ════════════════════════════════════════════════════════════════
 
         protected override void OnClosed(EventArgs e)
         {

@@ -11,19 +11,10 @@
 
     <Grid x:Name="RootGrid">
         
-        <!-- Layer 1: Captured screenshot -->
         <Image x:Name="ScreenshotImage" Stretch="Fill" />
-
-        <!-- Layer 2: Dark tint overlay -->
         <Rectangle Fill="#88000000" />
-
-        <!-- Layer 3: Highlight rectangles are drawn here -->
         <Canvas x:Name="HighlightCanvas" />
-
-        <!-- Layer 4: Drag-to-select overlay (enabled after OCR completes) -->
         <Canvas x:Name="SelectionCanvas" Background="Transparent" IsHitTestVisible="False" />
-
-        <!-- Layer 5: Search bar (Spotlight-style) -->
         <Border x:Name="SearchBarBorder"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
@@ -43,7 +34,6 @@
                     <ColumnDefinition Width="Auto"/>
                 </Grid.ColumnDefinitions>
 
-                <!-- Magnifying glass icon -->
                 <TextBlock Grid.Column="0"
                            Text="&#x1F50D;"
                            FontSize="20"
@@ -51,7 +41,6 @@
                            Margin="4,0,12,0"
                            Opacity="0.6"/>
 
-                <!-- Search input -->
                 <TextBox x:Name="SearchBox"
                          Grid.Column="1"
                          FontSize="22"
@@ -61,7 +50,6 @@
                          VerticalAlignment="Center"
                          TextChanged="SearchBox_TextChanged"/>
 
-                <!-- Match counter -->
                 <TextBlock x:Name="MatchInfo"
                            Grid.Column="2"
                            FontSize="13"
@@ -71,7 +59,6 @@
             </Grid>
         </Border>
 
-        <!-- Loading indicator (shown while OCR is running) -->
         <Border x:Name="LoadingBadge"
                 HorizontalAlignment="Center"
                 VerticalAlignment="Top"
@@ -83,7 +70,6 @@
                        Foreground="#CDD6F4" FontSize="12" FontFamily="Segoe UI"/>
         </Border>
 
-        <!-- Hint bar at bottom -->
         <Border HorizontalAlignment="Center"
                 VerticalAlignment="Bottom"
                 Margin="0,0,0,30"

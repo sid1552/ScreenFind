@@ -13,9 +13,9 @@ namespace ScreenFind
         {
             string file;
             if (isDark)
-                file = highContrast ? "DarkHighContrastTheme.xaml" : "DarkTheme.xaml";
+                file = highContrast ? "Themes/DarkHighContrastTheme.xaml" : "Themes/DarkTheme.xaml";
             else
-                file = highContrast ? "LightHighContrastTheme.xaml" : "LightTheme.xaml";
+                file = highContrast ? "Themes/LightHighContrastTheme.xaml" : "Themes/LightTheme.xaml";
 
             var dict = new ResourceDictionary
             {

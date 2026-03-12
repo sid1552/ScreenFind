@@ -6,22 +6,15 @@ using System.Windows;
 namespace ScreenFind
 {
     /// <summary>
-    /// Fuzzy matching for OCR text — catches near-matches that exact substring search misses
-    /// (e.g. OCR reading "rn" as "m", "l" as "1", "O" as "0").
+    /// Catches near-matches that exact search misses (e.g. OCR reading "rn" as "m").
     /// </summary>
     public static class FuzzyMatcher
     {
-        /// <summary>
-        /// Standard Levenshtein edit distance between two strings.
-        /// Returns the minimum number of single-character edits (insert, delete, substitute)
-        /// needed to change <paramref name="a"/> into <paramref name="b"/>.
-        /// </summary>
         public static int LevenshteinDistance(string a, string b)
         {
             if (a.Length == 0) return b.Length;
             if (b.Length == 0) return a.Length;
 
-            // Use a single-row DP approach for memory efficiency
             var prev = new int[b.Length + 1];
             var curr = new int[b.Length + 1];
 
@@ -35,10 +28,9 @@ namespace ScreenFind
                 {
                     int cost = char.ToLowerInvariant(a[i - 1]) == char.ToLowerInvariant(b[j - 1]) ? 0 : 1;
                     curr[j] = Math.Min(
-                        Math.Min(curr[j - 1] + 1, prev[j] + 1),  // insert, delete
-                        prev[j - 1] + cost);                       // substitute
+                        Math.Min(curr[j - 1] + 1, prev[j] + 1),
+                        prev[j - 1] + cost);
                 }
-                // Swap rows
                 (prev, curr) = (curr, prev);
             }
 
@@ -46,12 +38,10 @@ namespace ScreenFind
         }
 
         /// <summary>
-        /// Returns true if the candidate word is a fuzzy match for the query word.
-        /// Threshold: max(1, wordLength / 4) — allows ~1 typo per 4 characters.
+        /// Threshold: max(1, wordLength / 4) -- allows ~1 typo per 4 characters.
         /// </summary>
         public static bool IsFuzzyMatch(string query, string candidate)
         {
-            // Quick length check — if lengths differ too much, can't be a match
             int maxLen = Math.Max(query.Length, candidate.Length);
             int threshold = Math.Max(1, maxLen / 4);
 
@@ -59,19 +49,10 @@ namespace ScreenFind
                 return false;
 
             int distance = LevenshteinDistance(query, candidate);
-            // Must be > 0 (exact matches are handled by the first pass) and within threshold
+            // > 0 because exact matches are handled separately
             return distance > 0 && distance <= threshold;
         }
 
-        /// <summary>
-        /// Scan OCR lines for fuzzy word-sequence matches.
-        /// Splits the query into words, then for each line checks consecutive OCR word
-        /// sequences of the same length. Skips words already covered by exact matches.
-        /// </summary>
-        /// <param name="lines">OCR results</param>
-        /// <param name="query">User's search query</param>
-        /// <param name="exactMatchedWords">Set of (lineIndex, wordIndex) pairs already matched exactly</param>
-        /// <returns>List of fuzzy MatchResults</returns>
         public static List<MatchResult> FindFuzzyMatches(
             List<OcrLineInfo> lines,
             string query,
@@ -89,10 +70,8 @@ namespace ScreenFind
                 if (line.Words.Count < queryWords.Length)
                     continue;
 
-                // Slide a window of queryWords.Length across the line's words
                 for (int startWord = 0; startWord <= line.Words.Count - queryWords.Length; startWord++)
                 {
-                    // Check if any word in this window was already exact-matched
                     bool overlapsExact = false;
                     for (int k = 0; k < queryWords.Length; k++)
                     {
@@ -104,7 +83,6 @@ namespace ScreenFind
                     }
                     if (overlapsExact) continue;
 
-                    // Check if every query word fuzzy-matches the corresponding OCR word
                     bool allMatch = true;
                     for (int k = 0; k < queryWords.Length; k++)
                     {
@@ -118,7 +96,6 @@ namespace ScreenFind
 
                     if (allMatch)
                     {
-                        // Combine bounding boxes of matched words
                         var hitWords = Enumerable.Range(startWord, queryWords.Length)
                             .Select(i => line.Words[i])
                             .ToList();

@@ -15,12 +15,10 @@ namespace ScreenFind
 {
     public partial class MainWindow : Window
     {
-        // ─── Win32 hotkey API ───────────────────────────────────────────
         private const int HOTKEY_ID = 9001;
         private const int WM_HOTKEY = 0x0312;
         private const uint MOD_NOREPEAT = 0x4000;
 
-        // Modifier flag values for FormatHotkey / Win32
         private const uint MOD_ALT   = 0x0001;
         private const uint MOD_CTRL  = 0x0002;
         private const uint MOD_SHIFT = 0x0004;
@@ -32,24 +30,21 @@ namespace ScreenFind
         [DllImport("user32.dll")]
         private static extern bool UnregisterHotKey(IntPtr hWnd, int id);
 
-        // ─── State ─────────────────────────────────────────────────────
         private HwndSource? _hwndSource;
         private List<OverlayWindow> _allOverlays = new();
         private SysForms.NotifyIcon? _trayIcon;
         private Settings _settings = null!;
 
-        // Currently active hotkey (loaded from settings)
         private uint _hotkeyModifiers;
         private uint _hotkeyKey;
 
-        // Hotkey recording state
         private bool _isRecording;
 
         public MainWindow()
         {
             InitializeComponent();
 
-            // Set window icon from app.ico (loaded from disk so it works in single-file publish)
+            // Loaded from disk (not XAML) so it works in single-file publish
             var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
             if (System.IO.File.Exists(icoPath))
                 Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(icoPath));
@@ -68,8 +63,6 @@ namespace ScreenFind
             Loaded += MainWindow_Loaded;
             SetupTrayIcon();
 
-            // Pre-warm overlay windows after the main window finishes loading.
-            // This forces HWND creation + WPF layout so the first hotkey press is fast.
             Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Background,
                 new Action(PrewarmOverlays));
         }
@@ -107,7 +100,6 @@ namespace ScreenFind
                     primaryOverlay = overlay;
             }
 
-            // Wire search sync
             if (primaryOverlay != null)
             {
                 primaryOverlay.SearchChanged += query =>
@@ -121,9 +113,6 @@ namespace ScreenFind
             }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Tab switching (Settings / About)
-        // ────────────────────────────────────────────────────────────────
         private void SettingsTab_Click(object sender, MouseButtonEventArgs e)
         {
             SwitchTab("settings");
@@ -163,18 +152,12 @@ namespace ScreenFind
                 SettingsTabText.Foreground = inactiveBrush;
                 SettingsTabBorder.BorderBrush = transparentBrush;
 
-                // Update the hotkey label in the About panel to reflect current hotkey
                 AboutHotkeyLabel.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
             }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  System tray icon
-        // ────────────────────────────────────────────────────────────────
         private void SetupTrayIcon()
         {
-            // Load custom icon from the embedded resource (app.ico in project root).
-            // Falls back to the generic Windows app icon if the file isn't found.
             SysDrawing.Icon trayIcon;
             var icoPath = System.IO.Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "app.ico");
             if (System.IO.File.Exists(icoPath))
@@ -189,7 +172,6 @@ namespace ScreenFind
                 Visible = false
             };
 
-            // Double-click tray icon to restore window
             _trayIcon.DoubleClick += (s, e) =>
             {
                 Show();
@@ -198,7 +180,6 @@ namespace ScreenFind
                 _trayIcon.Visible = false;
             };
 
-            // Right-click context menu
             var menu = new SysForms.ContextMenuStrip();
             menu.Items.Add("Options", null, (s, e) =>
             {
@@ -241,9 +222,6 @@ namespace ScreenFind
             ApplyThemeAndRefresh();
         }
 
-        /// <summary>
-        /// Swaps the theme dictionary and refreshes any code-behind-set colors.
-        /// </summary>
         private void ApplyThemeAndRefresh()
         {
             App.ApplyTheme(_settings.DarkMode, _settings.HighContrast);
@@ -290,9 +268,6 @@ namespace ScreenFind
             catch { /* best effort — may fail if registry is locked */ }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Monitor picker — dynamically build checkboxes for each screen
-        // ────────────────────────────────────────────────────────────────
         private void PopulateMonitorList()
         {
             MonitorListPanel.Children.Clear();
@@ -303,7 +278,6 @@ namespace ScreenFind
                 var screen = screens[i];
                 var bounds = screen.Bounds;
 
-                // Build label like "Monitor 1 — 1920×1080 (Primary)"
                 string label = $"Monitor {i + 1} — {bounds.Width}\u00D7{bounds.Height}";
                 if (screen.Primary)
                     label += " (Primary)";
@@ -314,14 +288,13 @@ namespace ScreenFind
                 {
                     Content = label,
                     IsChecked = isChecked,
-                    Tag = screen.DeviceName, // store device name for the handler
+                    Tag = screen.DeviceName,
                     FontSize = 12,
                     Foreground = (SolidColorBrush)FindResource("SecondaryBrush"),
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Margin = new Thickness(0, 6, 0, 0)
                 };
 
-                // Use the same themed checkbox style defined in XAML resources
                 cb.Style = (Style)FindResource("CatppuccinCheckBox");
 
                 cb.Checked += MonitorCheckbox_Changed;
@@ -340,12 +313,11 @@ namespace ScreenFind
 
             if (cb.IsChecked == true)
             {
-                // Checked → remove from exclusion list
                 _settings.ExcludedMonitors.Remove(deviceName);
             }
             else
             {
-                // Unchecked — but don't allow unchecking the last one
+                // Don't allow unchecking the last monitor
                 int checkedCount = 0;
                 foreach (CheckBox child in MonitorListPanel.Children)
                 {
@@ -355,12 +327,10 @@ namespace ScreenFind
 
                 if (checkedCount == 0)
                 {
-                    // Re-check it — can't have zero monitors
                     cb.IsChecked = true;
                     return;
                 }
 
-                // Add to exclusion list
                 if (!_settings.ExcludedMonitors.Contains(deviceName))
                     _settings.ExcludedMonitors.Add(deviceName);
             }
@@ -384,9 +354,6 @@ namespace ScreenFind
                 _trayIcon.Visible = true;
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Setup: register the global hotkey once the window has an HWND
-        // ────────────────────────────────────────────────────────────────
         private void MainWindow_Loaded(object sender, RoutedEventArgs e)
         {
             var helper = new WindowInteropHelper(this);
@@ -410,7 +377,7 @@ namespace ScreenFind
                     MessageBoxImage.Warning);
             }
 
-            // If launched with --startup flag (from Windows auto-start), minimize to tray
+            // --startup flag = launched from Windows auto-start, minimize to tray
             var args = Environment.GetCommandLineArgs();
             if (args.Contains("--startup"))
             {
@@ -420,9 +387,6 @@ namespace ScreenFind
             }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Listen for the hotkey message
-        // ────────────────────────────────────────────────────────────────
         private IntPtr WndProc(IntPtr hwnd, int msg, IntPtr wParam, IntPtr lParam, ref bool handled)
         {
             if (msg == WM_HOTKEY && wParam.ToInt32() == HOTKEY_ID)
@@ -433,9 +397,6 @@ namespace ScreenFind
             return IntPtr.Zero;
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Hotkey recording (click-to-change)
-        // ────────────────────────────────────────────────────────────────
         private void HotkeyBorder_Click(object sender, System.Windows.Input.MouseButtonEventArgs e)
         {
             if (_isRecording) return;
@@ -451,48 +412,41 @@ namespace ScreenFind
         {
             e.Handled = true;
 
-            // Escape cancels recording
             if (e.Key == Key.Escape)
             {
                 StopRecording();
                 return;
             }
 
-            // Resolve system keys (e.g. Alt produces Key.System)
+            // Alt produces Key.System — resolve to the actual key
             var key = (e.Key == Key.System) ? e.SystemKey : e.Key;
 
-            // Ignore lone modifier presses — wait for a real key
+            // Ignore lone modifier presses
             if (key == Key.LeftCtrl || key == Key.RightCtrl ||
                 key == Key.LeftShift || key == Key.RightShift ||
                 key == Key.LeftAlt || key == Key.RightAlt ||
                 key == Key.LWin || key == Key.RWin)
                 return;
 
-            // Build Win32 modifier flags from current keyboard state
             uint mods = 0;
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) mods |= MOD_CTRL;
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift))   mods |= MOD_SHIFT;
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt))     mods |= MOD_ALT;
             if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) mods |= MOD_WIN;
 
-            // Require at least one modifier
             if (mods == 0)
             {
                 HotkeyText.Text = "Need a modifier (Ctrl/Alt/Shift)...";
                 return;
             }
 
-            // Convert WPF Key to Win32 virtual key code
             uint vk = (uint)KeyInterop.VirtualKeyFromKey(key);
-
-            // Try to register the new hotkey
             var helper = new WindowInteropHelper(this);
             UnregisterHotKey(helper.Handle, HOTKEY_ID);
 
             bool ok = RegisterHotKey(helper.Handle, HOTKEY_ID, mods | MOD_NOREPEAT, vk);
             if (ok)
             {
-                // Success — save new hotkey
                 _hotkeyModifiers = mods;
                 _hotkeyKey = vk;
                 _settings.HotkeyModifiers = mods;
@@ -502,11 +456,10 @@ namespace ScreenFind
             }
             else
             {
-                // Failed — re-register the old hotkey
+                // Re-register old hotkey since new one failed
                 RegisterHotKey(helper.Handle, HOTKEY_ID, _hotkeyModifiers | MOD_NOREPEAT, _hotkeyKey);
                 HotkeyText.Text = $"{FormatHotkey(mods, vk)} is taken!";
                 HotkeyText.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
-                // Let them try again (still recording)
             }
         }
 
@@ -532,26 +485,14 @@ namespace ScreenFind
             return string.Join(" + ", parts);
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Hotkey pressed → capture screen → show overlay
-        // ────────────────────────────────────────────────────────────────
         private async void OnHotkeyPressed()
         {
-            // Dismiss any visible overlays first
             DismissAllOverlays();
 
             try
             {
-                // Rebuild overlays if the monitor config changed (monitors added/removed,
-                // or user changed excluded monitors in settings)
                 RebuildOverlaysIfNeeded();
 
-                // Get active screens matching our overlays
-                var screens = _allOverlays
-                    .Select(o => o)
-                    .ToArray();
-
-                // Capture screens on background thread (the only slow part now)
                 var screenObjects = SysForms.Screen.AllScreens
                     .Where(s => !_settings.ExcludedMonitors.Contains(s.DeviceName))
                     .ToArray();
@@ -562,7 +503,6 @@ namespace ScreenFind
                 var bitmaps = await System.Threading.Tasks.Task.Run(() =>
                     CaptureScreens(screenObjects));
 
-                // Activate each pre-warmed overlay with its fresh screenshot
                 OverlayWindow? primaryOverlay = null;
                 for (int i = 0; i < _allOverlays.Count && i < bitmaps.Count; i++)
                 {
@@ -570,10 +510,7 @@ namespace ScreenFind
                     overlay.Activate(bitmaps[i]);
 
                     if (primaryOverlay == null)
-                    {
-                        // First overlay that's primary (or first one if none is primary)
                         primaryOverlay = overlay;
-                    }
                 }
             }
             catch (Exception ex)
@@ -599,11 +536,9 @@ namespace ScreenFind
             if (activeScreens.Length == 0)
                 activeScreens = SysForms.Screen.AllScreens.Where(s => s.Primary).ToArray();
 
-            // Check if overlay count matches and device names match
             if (_allOverlays.Count == activeScreens.Length)
-                return; // assume same config — good enough for most cases
+                return;
 
-            // Config changed — rebuild
             foreach (var o in _allOverlays)
             {
                 try { o.Close(); } catch { }
@@ -652,20 +587,13 @@ namespace ScreenFind
             }
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Capture ALL screens using GDI+
-        // ────────────────────────────────────────────────────────────────
-        /// <summary>
-        /// Capture specific screens using GDI+. Can run on a background thread.
-        /// Returns bitmaps in the same order as the input screens array.
-        /// </summary>
         private static List<SysDrawing.Bitmap> CaptureScreens(SysForms.Screen[] screens)
         {
             var bitmaps = new List<SysDrawing.Bitmap>(screens.Length);
 
             foreach (var screen in screens)
             {
-                var bounds = screen.Bounds; // physical pixels (app is DPI-aware)
+                var bounds = screen.Bounds;
 
                 var bmp = new SysDrawing.Bitmap(
                     bounds.Width,
@@ -687,12 +615,8 @@ namespace ScreenFind
             return bitmaps;
         }
 
-        // ────────────────────────────────────────────────────────────────
-        //  Cleanup
-        // ────────────────────────────────────────────────────────────────
         protected override void OnClosed(EventArgs e)
         {
-            // Actually close (destroy) all cached overlays on app exit
             foreach (var o in _allOverlays)
             {
                 try { o.Close(); } catch { }
@@ -711,7 +635,6 @@ namespace ScreenFind
             _hwndSource?.RemoveHook(WndProc);
             base.OnClosed(e);
 
-            // Shut down the whole app when the main window closes
             Application.Current.Shutdown();
         }
     }
