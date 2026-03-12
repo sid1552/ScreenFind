@@ -10,6 +10,8 @@ namespace ScreenFind
         public bool EnhanceOcr { get; set; } = false;
         public bool DragToSelect { get; set; } = true;
         public bool StartWithWindows { get; set; } = false;
+        public bool DarkMode { get; set; } = true;
+        public bool HighContrast { get; set; } = false;
 
         // Monitor exclusion — stores DeviceNames of unchecked monitors
         // Empty list = all monitors captured (new monitors auto-included)

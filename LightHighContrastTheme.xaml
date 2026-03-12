@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Light High Contrast — pure white bg, black text, strong borders -->
+    <SolidColorBrush x:Key="WindowBgBrush"      Color="#FFFFFF"/>
+    <SolidColorBrush x:Key="CardBgBrush"         Color="#F0F0F0"/>
+    <SolidColorBrush x:Key="SurfaceBrush"        Color="#DDDDDD"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush"   Color="#CCCCCC"/>
+    <SolidColorBrush x:Key="MutedBrush"          Color="#555555"/>
+    <SolidColorBrush x:Key="HintBrush"           Color="#666666"/>
+    <SolidColorBrush x:Key="SecondaryBrush"      Color="#333333"/>
+    <SolidColorBrush x:Key="PrimaryBrush"        Color="#000000"/>
+    <SolidColorBrush x:Key="AccentTextBrush"     Color="#8B0000"/>
+    <SolidColorBrush x:Key="AccentBrush"         Color="#5500AA"/>
+    <SolidColorBrush x:Key="CheckBrush"          Color="#006600"/>
+    <SolidColorBrush x:Key="WarningBrush"        Color="#996600"/>
+    <SolidColorBrush x:Key="ErrorBrush"          Color="#CC0000"/>
+    <SolidColorBrush x:Key="FooterBrush"         Color="#AAAAAA"/>
+
+</ResourceDictionary>

@@ -55,8 +55,11 @@ namespace ScreenFind
                 Icon = new System.Windows.Media.Imaging.BitmapImage(new Uri(icoPath));
 
             _settings = Settings.Load();
+            App.ApplyTheme(_settings.DarkMode, _settings.HighContrast);
             _hotkeyModifiers = _settings.HotkeyModifiers;
             _hotkeyKey = _settings.HotkeyKey;
+            DarkModeCheckbox.IsChecked = _settings.DarkMode;
+            HighContrastCheckbox.IsChecked = _settings.HighContrast;
             EnhanceOcrCheckbox.IsChecked = _settings.EnhanceOcr;
             DragToSelectCheckbox.IsChecked = _settings.DragToSelect;
             StartWithWindowsCheckbox.IsChecked = _settings.StartWithWindows;
@@ -133,9 +136,9 @@ namespace ScreenFind
 
         private void SwitchTab(string tabName)
         {
-            var activeColor = (Color)ColorConverter.ConvertFromString("#CDD6F4");
-            var inactiveColor = (Color)ColorConverter.ConvertFromString("#585B70");
-            var accentBrush = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#CBA6F7"));
+            var activeBrush = (SolidColorBrush)FindResource("PrimaryBrush");
+            var inactiveBrush = (SolidColorBrush)FindResource("MutedBrush");
+            var accentBrush = (SolidColorBrush)FindResource("AccentBrush");
             var transparentBrush = Brushes.Transparent;
 
             if (tabName == "settings")
@@ -143,10 +146,10 @@ namespace ScreenFind
                 SettingsPanel.Visibility = Visibility.Visible;
                 AboutPanel.Visibility = Visibility.Collapsed;
 
-                SettingsTabText.Foreground = new SolidColorBrush(activeColor);
+                SettingsTabText.Foreground = activeBrush;
                 SettingsTabBorder.BorderBrush = accentBrush;
 
-                AboutTabText.Foreground = new SolidColorBrush(inactiveColor);
+                AboutTabText.Foreground = inactiveBrush;
                 AboutTabBorder.BorderBrush = transparentBrush;
             }
             else
@@ -154,10 +157,10 @@ namespace ScreenFind
                 SettingsPanel.Visibility = Visibility.Collapsed;
                 AboutPanel.Visibility = Visibility.Visible;
 
-                AboutTabText.Foreground = new SolidColorBrush(activeColor);
+                AboutTabText.Foreground = activeBrush;
                 AboutTabBorder.BorderBrush = accentBrush;
 
-                SettingsTabText.Foreground = new SolidColorBrush(inactiveColor);
+                SettingsTabText.Foreground = inactiveBrush;
                 SettingsTabBorder.BorderBrush = transparentBrush;
 
                 // Update the hotkey label in the About panel to reflect current hotkey
@@ -220,6 +223,32 @@ namespace ScreenFind
             if (_settings == null) return; // fired during InitializeComponent before settings loaded
             _settings.EnhanceOcr = EnhanceOcrCheckbox.IsChecked == true;
             _settings.Save();
+        }
+
+        private void DarkModeCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+            _settings.DarkMode = DarkModeCheckbox.IsChecked == true;
+            _settings.Save();
+            ApplyThemeAndRefresh();
+        }
+
+        private void HighContrastCheckbox_Changed(object sender, RoutedEventArgs e)
+        {
+            if (_settings == null) return;
+            _settings.HighContrast = HighContrastCheckbox.IsChecked == true;
+            _settings.Save();
+            ApplyThemeAndRefresh();
+        }
+
+        /// <summary>
+        /// Swaps the theme dictionary and refreshes any code-behind-set colors.
+        /// </summary>
+        private void ApplyThemeAndRefresh()
+        {
+            App.ApplyTheme(_settings.DarkMode, _settings.HighContrast);
+            SwitchTab(SettingsPanel.Visibility == Visibility.Visible ? "settings" : "about");
+            PopulateMonitorList();
         }
 
         private void StartWithWindowsCheckbox_Changed(object sender, RoutedEventArgs e)
@@ -287,87 +316,19 @@ namespace ScreenFind
                     IsChecked = isChecked,
                     Tag = screen.DeviceName, // store device name for the handler
                     FontSize = 12,
-                    Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#A6ADC8")),
+                    Foreground = (SolidColorBrush)FindResource("SecondaryBrush"),
                     HorizontalAlignment = HorizontalAlignment.Left,
                     Margin = new Thickness(0, 6, 0, 0)
                 };
 
-                // Apply the same Catppuccin checkbox template as the XAML checkboxes
-                cb.Style = BuildCheckboxStyle();
+                // Use the same themed checkbox style defined in XAML resources
+                cb.Style = (Style)FindResource("CatppuccinCheckBox");
 
                 cb.Checked += MonitorCheckbox_Changed;
                 cb.Unchecked += MonitorCheckbox_Changed;
 
                 MonitorListPanel.Children.Add(cb);
             }
-        }
-
-        /// <summary>
-        /// Builds the Catppuccin-themed CheckBox Style in code,
-        /// matching the DragToSelect / EnhanceOcr checkbox template in XAML.
-        /// </summary>
-        private static Style BuildCheckboxStyle()
-        {
-            // Colors matching the XAML theme
-            var bgColor = (Color)ColorConverter.ConvertFromString("#45475A");
-            var borderColor = (Color)ColorConverter.ConvertFromString("#585B70");
-            var checkColor = (Color)ColorConverter.ConvertFromString("#A6E3A1");
-            var hoverColor = (Color)ColorConverter.ConvertFromString("#585B70");
-
-            // Build the ControlTemplate
-            var template = new ControlTemplate(typeof(CheckBox));
-
-            // Root: horizontal StackPanel
-            var stackFactory = new FrameworkElementFactory(typeof(StackPanel));
-            stackFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
-            stackFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-
-            // Box border
-            var boxFactory = new FrameworkElementFactory(typeof(Border), "box");
-            boxFactory.SetValue(FrameworkElement.WidthProperty, 18.0);
-            boxFactory.SetValue(FrameworkElement.HeightProperty, 18.0);
-            boxFactory.SetValue(Border.BackgroundProperty, new SolidColorBrush(bgColor));
-            boxFactory.SetValue(Border.CornerRadiusProperty, new CornerRadius(4));
-            boxFactory.SetValue(Border.BorderBrushProperty, new SolidColorBrush(borderColor));
-            boxFactory.SetValue(Border.BorderThicknessProperty, new Thickness(1));
-            boxFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            boxFactory.SetValue(FrameworkElement.MarginProperty, new Thickness(0, 0, 8, 0));
-
-            // Checkmark text inside the box
-            var checkFactory = new FrameworkElementFactory(typeof(TextBlock), "check");
-            checkFactory.SetValue(TextBlock.TextProperty, "\u2713");
-            checkFactory.SetValue(TextBlock.ForegroundProperty, new SolidColorBrush(checkColor));
-            checkFactory.SetValue(TextBlock.FontSizeProperty, 13.0);
-            checkFactory.SetValue(TextBlock.FontWeightProperty, FontWeights.Bold);
-            checkFactory.SetValue(FrameworkElement.HorizontalAlignmentProperty, HorizontalAlignment.Center);
-            checkFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            checkFactory.SetValue(UIElement.VisibilityProperty, Visibility.Collapsed);
-
-            boxFactory.AppendChild(checkFactory);
-            stackFactory.AppendChild(boxFactory);
-
-            // Content presenter
-            var contentFactory = new FrameworkElementFactory(typeof(ContentPresenter));
-            contentFactory.SetValue(FrameworkElement.VerticalAlignmentProperty, VerticalAlignment.Center);
-            stackFactory.AppendChild(contentFactory);
-
-            template.VisualTree = stackFactory;
-
-            // Trigger: IsChecked = True → show checkmark + green border
-            var checkedTrigger = new Trigger { Property = CheckBox.IsCheckedProperty, Value = true };
-            checkedTrigger.Setters.Add(new Setter(UIElement.VisibilityProperty, Visibility.Visible, "check"));
-            checkedTrigger.Setters.Add(new Setter(Border.BorderBrushProperty, new SolidColorBrush(checkColor), "box"));
-            template.Triggers.Add(checkedTrigger);
-
-            // Trigger: IsMouseOver = True → lighter background
-            var hoverTrigger = new Trigger { Property = UIElement.IsMouseOverProperty, Value = true };
-            hoverTrigger.Setters.Add(new Setter(Border.BackgroundProperty, new SolidColorBrush(hoverColor), "box"));
-            template.Triggers.Add(hoverTrigger);
-
-            // Wrap in a Style
-            var style = new Style(typeof(CheckBox));
-            style.Setters.Add(new Setter(Control.TemplateProperty, template));
-            return style;
         }
 
         private void MonitorCheckbox_Changed(object sender, RoutedEventArgs e)
@@ -480,9 +441,9 @@ namespace ScreenFind
             if (_isRecording) return;
             _isRecording = true;
             HotkeyText.Text = "Press a key combo...";
-            HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9E2AF"));
+            HotkeyText.Foreground = (SolidColorBrush)FindResource("WarningBrush");
             HotkeyHint.Text = "Esc to cancel";
-            HotkeyHint.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F9E2AF"));
+            HotkeyHint.Foreground = (SolidColorBrush)FindResource("WarningBrush");
             PreviewKeyDown += HotkeyCapture_PreviewKeyDown;
         }
 
@@ -544,7 +505,7 @@ namespace ScreenFind
                 // Failed — re-register the old hotkey
                 RegisterHotKey(helper.Handle, HOTKEY_ID, _hotkeyModifiers | MOD_NOREPEAT, _hotkeyKey);
                 HotkeyText.Text = $"{FormatHotkey(mods, vk)} is taken!";
-                HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F38BA8"));
+                HotkeyText.Foreground = (SolidColorBrush)FindResource("ErrorBrush");
                 // Let them try again (still recording)
             }
         }
@@ -554,9 +515,9 @@ namespace ScreenFind
             _isRecording = false;
             PreviewKeyDown -= HotkeyCapture_PreviewKeyDown;
             HotkeyText.Text = FormatHotkey(_hotkeyModifiers, _hotkeyKey);
-            HotkeyText.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#F5E0DC"));
+            HotkeyText.Foreground = (SolidColorBrush)FindResource("AccentTextBrush");
             HotkeyHint.Text = "click to change";
-            HotkeyHint.Foreground = new SolidColorBrush((Color)ColorConverter.ConvertFromString("#6C7086"));
+            HotkeyHint.Foreground = (SolidColorBrush)FindResource("HintBrush");
         }
 
         /// <summary>Builds a display string like "Ctrl + Shift + F" from Win32 modifier flags and VK code.</summary>

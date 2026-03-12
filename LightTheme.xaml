@@ -1,0 +1,20 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <!-- Catppuccin Latte palette -->
+    <SolidColorBrush x:Key="WindowBgBrush"      Color="#EFF1F5"/>
+    <SolidColorBrush x:Key="CardBgBrush"         Color="#E6E9EF"/>
+    <SolidColorBrush x:Key="SurfaceBrush"        Color="#CCD0DA"/>
+    <SolidColorBrush x:Key="SurfaceHoverBrush"   Color="#BCC0CC"/>
+    <SolidColorBrush x:Key="MutedBrush"          Color="#9CA0B0"/>
+    <SolidColorBrush x:Key="HintBrush"           Color="#8C8FA1"/>
+    <SolidColorBrush x:Key="SecondaryBrush"      Color="#6C6F85"/>
+    <SolidColorBrush x:Key="PrimaryBrush"        Color="#4C4F69"/>
+    <SolidColorBrush x:Key="AccentTextBrush"     Color="#DC8A78"/>
+    <SolidColorBrush x:Key="AccentBrush"         Color="#8839EF"/>
+    <SolidColorBrush x:Key="CheckBrush"          Color="#40A02B"/>
+    <SolidColorBrush x:Key="WarningBrush"        Color="#DF8E1D"/>
+    <SolidColorBrush x:Key="ErrorBrush"          Color="#D20F39"/>
+    <SolidColorBrush x:Key="FooterBrush"         Color="#BCC0CC"/>
+
+</ResourceDictionary>

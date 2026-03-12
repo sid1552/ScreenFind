@@ -6,16 +6,16 @@
         MinWidth="400" MinHeight="400"
         ResizeMode="CanResize"
         WindowStartupLocation="CenterScreen"
-        Background="#1E1E2E">
+        Background="{DynamicResource WindowBgBrush}">
     <Window.Resources>
-        <!-- Thin dark scrollbar thumb -->
+        <!-- Thin scrollbar thumb -->
         <Style x:Key="ScrollBarThumb" TargetType="Thumb">
             <Setter Property="OverridesDefaultStyle" Value="True"/>
             <Setter Property="IsTabStop" Value="False"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="Thumb">
-                        <Border CornerRadius="3" Background="#45475A" Margin="1"/>
+                        <Border CornerRadius="3" Background="{DynamicResource SurfaceBrush}" Margin="1"/>
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
@@ -45,21 +45,21 @@
             </Style.Triggers>
         </Style>
 
-        <!-- Catppuccin checkbox style (reusable) -->
+        <!-- Catppuccin checkbox style (reusable, themed) -->
         <Style x:Key="CatppuccinCheckBox" TargetType="CheckBox">
             <Setter Property="FontSize" Value="12"/>
-            <Setter Property="Foreground" Value="#A6ADC8"/>
+            <Setter Property="Foreground" Value="{DynamicResource SecondaryBrush}"/>
             <Setter Property="Margin" Value="0,8,0,0"/>
             <Setter Property="Template">
                 <Setter.Value>
                     <ControlTemplate TargetType="CheckBox">
                         <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                             <Border x:Name="box" Width="18" Height="18"
-                                    Background="#45475A" CornerRadius="4"
-                                    BorderBrush="#585B70" BorderThickness="1"
+                                    Background="{DynamicResource SurfaceBrush}" CornerRadius="4"
+                                    BorderBrush="{DynamicResource MutedBrush}" BorderThickness="1"
                                     VerticalAlignment="Center" Margin="0,0,8,0">
                                 <TextBlock x:Name="check" Text="&#x2713;"
-                                           Foreground="#A6E3A1" FontSize="13" FontWeight="Bold"
+                                           Foreground="{DynamicResource CheckBrush}" FontSize="13" FontWeight="Bold"
                                            HorizontalAlignment="Center" VerticalAlignment="Center"
                                            Visibility="Collapsed"/>
                             </Border>
@@ -68,10 +68,10 @@
                         <ControlTemplate.Triggers>
                             <Trigger Property="IsChecked" Value="True">
                                 <Setter TargetName="check" Property="Visibility" Value="Visible"/>
-                                <Setter TargetName="box" Property="BorderBrush" Value="#A6E3A1"/>
+                                <Setter TargetName="box" Property="BorderBrush" Value="{DynamicResource CheckBrush}"/>
                             </Trigger>
                             <Trigger Property="IsMouseOver" Value="True">
-                                <Setter TargetName="box" Property="Background" Value="#585B70"/>
+                                <Setter TargetName="box" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                             </Trigger>
                         </ControlTemplate.Triggers>
                     </ControlTemplate>
@@ -81,7 +81,7 @@
 
         <!-- Section card style -->
         <Style x:Key="SectionCard" TargetType="Border">
-            <Setter Property="Background" Value="#313244"/>
+            <Setter Property="Background" Value="{DynamicResource CardBgBrush}"/>
             <Setter Property="CornerRadius" Value="10"/>
             <Setter Property="Padding" Value="18,14"/>
             <Setter Property="Margin" Value="0,0,0,12"/>
@@ -90,7 +90,7 @@
         <!-- Section header text style -->
         <Style x:Key="SectionHeader" TargetType="TextBlock">
             <Setter Property="FontSize" Value="13"/>
-            <Setter Property="Foreground" Value="#585B70"/>
+            <Setter Property="Foreground" Value="{DynamicResource MutedBrush}"/>
             <Setter Property="FontWeight" Value="SemiBold"/>
             <Setter Property="Margin" Value="0,0,0,8"/>
             <Setter Property="TextAlignment" Value="Left"/>
@@ -103,44 +103,42 @@
             <RowDefinition Height="*"/>     <!-- Tab content -->
         </Grid.RowDefinitions>
 
-        <!-- ═══ Header (always visible) ═══ -->
+        <!-- Header (always visible) -->
         <StackPanel Grid.Row="0" HorizontalAlignment="Center" Margin="0,0,0,12">
             <TextBlock Text="ScreenFind"
-                       FontSize="30" FontWeight="Bold" Foreground="#CDD6F4"
+                       FontSize="30" FontWeight="Bold" Foreground="{DynamicResource PrimaryBrush}"
                        HorizontalAlignment="Center"/>
             <TextBlock Text="Ctrl+F for your entire screen"
-                       FontSize="14" Foreground="#A6ADC8"
+                       FontSize="14" Foreground="{DynamicResource SecondaryBrush}"
                        HorizontalAlignment="Center" Margin="0,4,0,0"/>
         </StackPanel>
 
-        <!-- ═══ Tab bar ═══ -->
+        <!-- Tab bar -->
         <StackPanel Grid.Row="1" Orientation="Horizontal" HorizontalAlignment="Center" Margin="0,0,0,16">
-            <!-- Settings tab -->
             <Border x:Name="SettingsTabBorder" Cursor="Hand"
                     Padding="12,6" Margin="0,0,10,0"
-                    BorderThickness="0,0,0,2" BorderBrush="#CBA6F7"
+                    BorderThickness="0,0,0,2" BorderBrush="{DynamicResource AccentBrush}"
                     Background="Transparent"
                     MouseLeftButtonDown="SettingsTab_Click">
                 <TextBlock x:Name="SettingsTabText" Text="Settings"
-                           FontSize="14" Foreground="#CDD6F4" FontWeight="SemiBold"/>
+                           FontSize="14" Foreground="{DynamicResource PrimaryBrush}" FontWeight="SemiBold"/>
             </Border>
-            <!-- About tab -->
             <Border x:Name="AboutTabBorder" Cursor="Hand"
                     Padding="12,6" Margin="10,0,0,0"
                     BorderThickness="0,0,0,2" BorderBrush="Transparent"
                     Background="Transparent"
                     MouseLeftButtonDown="AboutTab_Click">
                 <TextBlock x:Name="AboutTabText" Text="About"
-                           FontSize="14" Foreground="#585B70" FontWeight="SemiBold"/>
+                           FontSize="14" Foreground="{DynamicResource MutedBrush}" FontWeight="SemiBold"/>
             </Border>
         </StackPanel>
 
-        <!-- ═══ Settings panel ═══ -->
+        <!-- Settings panel -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled">
             <StackPanel x:Name="SettingsPanel" Width="360" Margin="0,0,0,10">
 
-                <!-- ── Hotkey card ── -->
+                <!-- Hotkey card -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="HOTKEY" Style="{StaticResource SectionHeader}"/>
@@ -149,40 +147,53 @@
                                 MouseLeftButtonDown="HotkeyBorder_Click">
                             <Border.Style>
                                 <Style TargetType="Border">
-                                    <Setter Property="Background" Value="#45475A"/>
+                                    <Setter Property="Background" Value="{DynamicResource SurfaceBrush}"/>
                                     <Style.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter Property="Background" Value="#585B70"/>
+                                            <Setter Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                                         </Trigger>
                                     </Style.Triggers>
                                 </Style>
                             </Border.Style>
                             <DockPanel>
-                                <TextBlock x:Name="HotkeyText" FontSize="14" Foreground="#F5E0DC"
+                                <TextBlock x:Name="HotkeyText" FontSize="14" Foreground="{DynamicResource AccentTextBrush}"
                                            FontWeight="SemiBold" VerticalAlignment="Center"/>
                                 <TextBlock x:Name="HotkeyHint" Text="click to change"
-                                           FontSize="10" Foreground="#6C7086"
+                                           FontSize="10" Foreground="{DynamicResource HintBrush}"
                                            VerticalAlignment="Center" HorizontalAlignment="Right"/>
                             </DockPanel>
                         </Border>
                     </StackPanel>
                 </Border>
 
-                <!-- ── General card ── -->
+                <!-- General card -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="GENERAL" Style="{StaticResource SectionHeader}"/>
+
+                        <!-- Theme toggles -->
+                        <CheckBox x:Name="DarkModeCheckbox"
+                                  Content="Dark mode"
+                                  Style="{StaticResource CatppuccinCheckBox}" Margin="0"
+                                  Checked="DarkModeCheckbox_Changed"
+                                  Unchecked="DarkModeCheckbox_Changed"/>
+                        <CheckBox x:Name="HighContrastCheckbox"
+                                  Content="High contrast"
+                                  Style="{StaticResource CatppuccinCheckBox}"
+                                  Checked="HighContrastCheckbox_Changed"
+                                  Unchecked="HighContrastCheckbox_Changed"/>
+
                         <CheckBox x:Name="StartWithWindowsCheckbox"
                                   Content="Start with Windows"
-                                  Style="{StaticResource CatppuccinCheckBox}" Margin="0"
+                                  Style="{StaticResource CatppuccinCheckBox}"
                                   Checked="StartWithWindowsCheckbox_Changed"
                                   Unchecked="StartWithWindowsCheckbox_Changed"/>
                         <TextBlock Text="Launches minimized to system tray on login"
-                                   FontSize="11" Foreground="#585B70" Margin="26,2,0,0"/>
+                                   FontSize="11" Foreground="{DynamicResource MutedBrush}" Margin="26,2,0,0"/>
 
                         <Button x:Name="TrayButton" Content="Minimize to Tray"
                                 FontSize="12" FontFamily="Segoe UI"
-                                Foreground="#CDD6F4" Background="#45475A"
+                                Foreground="{DynamicResource PrimaryBrush}" Background="{DynamicResource SurfaceBrush}"
                                 BorderThickness="0" Padding="14,7"
                                 Cursor="Hand" Margin="0,12,0,0"
                                 HorizontalAlignment="Left"
@@ -195,7 +206,7 @@
                                     </Border>
                                     <ControlTemplate.Triggers>
                                         <Trigger Property="IsMouseOver" Value="True">
-                                            <Setter TargetName="border" Property="Background" Value="#585B70"/>
+                                            <Setter TargetName="border" Property="Background" Value="{DynamicResource SurfaceHoverBrush}"/>
                                         </Trigger>
                                     </ControlTemplate.Triggers>
                                 </ControlTemplate>
@@ -204,7 +215,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ── Overlay card ── -->
+                <!-- Overlay card -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="OVERLAY" Style="{StaticResource SectionHeader}"/>
@@ -221,7 +232,7 @@
                     </StackPanel>
                 </Border>
 
-                <!-- ── Monitors card ── -->
+                <!-- Monitors card -->
                 <Border Style="{StaticResource SectionCard}">
                     <StackPanel>
                         <TextBlock Text="MONITORS" Style="{StaticResource SectionHeader}"/>
@@ -232,24 +243,21 @@
             </StackPanel>
         </ScrollViewer>
 
-        <!-- ═══ About panel (hidden by default) ═══ -->
+        <!-- About panel (hidden by default) -->
         <ScrollViewer Grid.Row="2" VerticalScrollBarVisibility="Auto"
                       HorizontalScrollBarVisibility="Disabled"
                       x:Name="AboutPanel" Visibility="Collapsed">
             <StackPanel HorizontalAlignment="Center" Margin="0,4,0,10">
-                <!-- Description -->
                 <TextBlock Text="Search any text visible on your screen using OCR."
-                           FontSize="13" Foreground="#A6ADC8"
+                           FontSize="13" Foreground="{DynamicResource SecondaryBrush}"
                            HorizontalAlignment="Center" TextWrapping="Wrap"
                            Margin="0,0,0,20"/>
 
-                <!-- Keyboard Shortcuts heading -->
                 <TextBlock Text="Keyboard Shortcuts"
-                           FontSize="15" Foreground="#CDD6F4" FontWeight="SemiBold"
+                           FontSize="15" Foreground="{DynamicResource PrimaryBrush}" FontWeight="SemiBold"
                            HorizontalAlignment="Center" Margin="0,0,0,14"/>
 
-                <!-- Shortcut rows -->
-                <Grid HorizontalAlignment="Center" Margin="0,0,0,0">
+                <Grid HorizontalAlignment="Center">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="Auto"/>
                         <ColumnDefinition Width="20"/>
@@ -263,63 +271,57 @@
                         <RowDefinition Height="Auto"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Row 0: Hotkey -->
                     <TextBlock x:Name="AboutHotkeyLabel" Text="Ctrl + Shift + F"
                                Grid.Row="0" Grid.Column="0"
-                               FontSize="13" Foreground="#F5E0DC" FontWeight="SemiBold"
+                               FontSize="13" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold"
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Open search overlay"
                                Grid.Row="0" Grid.Column="2"
-                               FontSize="13" Foreground="#585B70"
+                               FontSize="13" Foreground="{DynamicResource MutedBrush}"
                                Margin="0,0,0,10"/>
 
-                    <!-- Row 1: Enter / Shift+Enter -->
                     <TextBlock Text="Enter / Shift+Enter"
                                Grid.Row="1" Grid.Column="0"
-                               FontSize="13" Foreground="#F5E0DC" FontWeight="SemiBold"
+                               FontSize="13" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold"
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Next / Previous match"
                                Grid.Row="1" Grid.Column="2"
-                               FontSize="13" Foreground="#585B70"
+                               FontSize="13" Foreground="{DynamicResource MutedBrush}"
                                Margin="0,0,0,10"/>
 
-                    <!-- Row 2: Escape -->
                     <TextBlock Text="Escape"
                                Grid.Row="2" Grid.Column="0"
-                               FontSize="13" Foreground="#F5E0DC" FontWeight="SemiBold"
+                               FontSize="13" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold"
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Close overlay"
                                Grid.Row="2" Grid.Column="2"
-                               FontSize="13" Foreground="#585B70"
+                               FontSize="13" Foreground="{DynamicResource MutedBrush}"
                                Margin="0,0,0,10"/>
 
-                    <!-- Row 3: Click highlight -->
                     <TextBlock Text="Click highlight"
                                Grid.Row="3" Grid.Column="0"
-                               FontSize="13" Foreground="#F5E0DC" FontWeight="SemiBold"
+                               FontSize="13" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold"
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Copy matched text"
                                Grid.Row="3" Grid.Column="2"
-                               FontSize="13" Foreground="#585B70"
+                               FontSize="13" Foreground="{DynamicResource MutedBrush}"
                                Margin="0,0,0,10"/>
 
-                    <!-- Row 4: Drag on overlay -->
                     <TextBlock Text="Drag on overlay"
                                Grid.Row="4" Grid.Column="0"
-                               FontSize="13" Foreground="#F5E0DC" FontWeight="SemiBold"
+                               FontSize="13" Foreground="{DynamicResource AccentTextBrush}" FontWeight="SemiBold"
                                Margin="0,0,0,10"/>
                     <TextBlock Text="Select text region"
                                Grid.Row="4" Grid.Column="2"
-                               FontSize="13" Foreground="#585B70"
+                               FontSize="13" Foreground="{DynamicResource MutedBrush}"
                                Margin="0,0,0,10"/>
                 </Grid>
 
-                <!-- Footer -->
                 <TextBlock Text="Built with WPF + Windows OCR"
-                           FontSize="11" Foreground="#45475A"
+                           FontSize="11" Foreground="{DynamicResource FooterBrush}"
                            HorizontalAlignment="Center" Margin="0,20,0,0"/>
                 <TextBlock x:Name="GithubLink" Text="github.com/sid1552/ScreenFind"
-                           FontSize="11" Foreground="#585B70"
+                           FontSize="11" Foreground="{DynamicResource MutedBrush}"
                            HorizontalAlignment="Center" Margin="0,6,0,0"
                            Cursor="Hand" TextDecorations="Underline"
                            MouseLeftButtonDown="GithubLink_Click"/>
